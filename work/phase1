@@ -1,0 +1,34 @@
+# Phase 1: Project Setup Walkthrough
+
+> [!NOTE]
+> This phase focused entirely on foundational setup, folder structuring, and backend API initialization. As a result, there is no UI to demonstrate visually yet. Starting from Phase 3 (Authentication + Users), this walkthrough will feature browser screenshots and video recordings.
+
+## Project Structure Overview
+
+I initialized the workspace following the "Monolith" separation requirement:
+```
+OrbitalX/
+├── frontend/ (Vite + React + TailwindCSS)
+└── backend/  (Node.js + Express + Mongoose)
+```
+
+## Work Completed
+
+### 1. Frontend Setup
+- **Framework Initialization:** Created a pure JavaScript React project via Vite.
+- **Styling Configuration:** Installed `tailwindcss`, `postcss`, and `autoprefixer`.
+- **Theming:** Defined the "Dark Cosmic Mission Control" theme inside [`tailwind.config.js`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/frontend/tailwind.config.js).
+- **Environment Setup:** Configured [`frontend/.env.local`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/frontend/.env.local) to point to the backend's `http://localhost:5000`.
+
+### 2. Backend Setup
+- **Server Scaffold:** Built the foundational Express server in [`backend/server.js`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/backend/server.js) with CORS, Helmet, and Morgan.
+- **Dependencies:** Installed Mongoose, `dotenv`, and required security middleware.
+- **Health Check API:** Created an initial `/api/health` endpoint to verify the server is running correctly.
+
+### 3. Server Verification
+Both development servers were verified to run without errors via package scripts:
+- Frontend: `npm run dev`
+- Backend: `npm run dev`
+
+> [!TIP]
+> The groundwork is fully prepared for Phase 2, where we will start defining Mongoose models for our database. Visual testing and `browser_subagent` captures will begin as soon as we start developing UI elements!

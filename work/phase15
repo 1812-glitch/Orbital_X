@@ -1,0 +1,32 @@
+# Phase 15: Activity Logs + Audit Completed
+
+I have completely executed Phase 15, adding centralized audit logging to the backend and a robust Activity Logs dashboard to the frontend.
+
+## Changes Made
+- **Centralized Audit Service**: Created `auditService.js` in the backend with a `logAction` helper.
+- **Backend Model Updates**: Expanded the `AuditLog` schema to include `severity` (INFO, WARNING, CRITICAL) and `source` for system-level automated events.
+- **Strategic Logging Hooks**: Integrated the logging service into `authController.js` and `adminController.js` so it automatically trails user logins, failed attempts, password updates, and manual overrides to the simulation engine.
+- **Dedicated Activity Logs Dashboard (`/admin/logs`)**:
+  - Implemented the UI exactly matching `Activity Logs (Admin).png`.
+  - Added robust date and severity filtering.
+  - Implemented the "Live Stream" feature which automatically polls for the latest events every 5 seconds.
+- **Compliance Export**: Added an "Export CSV" button that properly packages the current view into a clean `.csv` file for external compliance tracking.
+- **Security Enhancements**: 
+  - Mitigated CSV Injection (Formula Injection) by automatically sanitizing any log details that start with Excel formula triggers (`=`, `+`, `-`, `@`).
+  - Hardened the `auditController.js` to strictly enforce type checking, preventing potential NoSQL injection vectors or DoS via pagination parsing.
+
+## Verification
+- Verified that the backend successfully generates logs with severities upon logging in or starting the simulation.
+- Fixed `date-fns` formatting errors in the timeline components.
+- Tested the frontend Activity Logs view and the CSV Export logic, ensuring sanitized data correctly triggers a download.
+
+### UI Verification
+Here is the automated screenshot capturing the Activity Logs dashboard:
+
+**Activity Logs (Admin Hub):**
+![Activity Logs Dashboard](/c:/Users/RH364/.gemini/antigravity-ide/brain/781cab89-066c-4c4f-aa3d-6efea3d7d29b/phase15_activity_logs_png_1789144755396.png)
+
+### Next Steps
+We are now entering the final polish phase! Let me know if you would like me to proceed to **Phase 16: Integration + Complete User Flow** to finalize the application.
+
+Once you are satisfied, Phase 14 is fully complete! We can proceed to **Phase 15** or any other remaining polish you'd like.

@@ -1,0 +1,90 @@
+# Phase 1: Project Setup Walkthrough
+
+> [!NOTE]
+> This phase focused entirely on foundational setup, folder structuring, and backend API initialization. As a result, there is no UI to demonstrate visually yet. Starting from Phase 3 (Authentication + Users), this walkthrough will feature browser screenshots and video recordings.
+
+## Project Structure Overview
+
+I initialized the workspace following the "Monolith" separation requirement:
+```
+OrbitalX/
+├── frontend/ (Vite + React + TailwindCSS)
+└── backend/  (Node.js + Express + Mongoose)
+```
+
+## Work Completed
+
+### 1. Frontend Setup
+- **Framework Initialization:** Created a pure JavaScript React project via Vite.
+- **Styling Configuration:** Installed `tailwindcss`, `postcss`, and `autoprefixer`.
+- **Theming:** Defined the "Dark Cosmic Mission Control" theme inside [`tailwind.config.js`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/frontend/tailwind.config.js).
+- **Environment Setup:** Configured [`frontend/.env.local`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/frontend/.env.local) to point to the backend's `http://localhost:5000`.
+
+### 2. Backend Setup
+- **Server Scaffold:** Built the foundational Express server in [`backend/server.js`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/backend/server.js) with CORS, Helmet, and Morgan.
+- **Dependencies:** Installed Mongoose, `dotenv`, and required security middleware.
+- **Health Check API:** Created an initial `/api/health` endpoint to verify the server is running correctly.
+
+### 3. Server Verification
+Both development servers were verified to run without errors via package scripts:
+- Frontend: `npm run dev`
+- Backend: `npm run dev`
+
+## Phase 2: Database + Backend Foundation Walkthrough
+
+> [!NOTE]
+> Phase 2 implemented the core data layer. We built all 10 Mongoose schemas matching the OrbitalX master prompt specifications and integrated standard API utility structures.
+
+### Work Completed
+- **MongoDB Connection:** Implemented `connectDB` in `src/config/db.js`
+- **Mongoose Models:** Created structured schemas in `src/models/` for:
+  - `User`, `Satellite`, `Mission`, `Telemetry`, `GroundStation`
+  - `Alert`, `Command`, `Communication`, `Notification`, `AuditLog`
+- **API Utilities:** Established reusable `ApiResponse`, `ApiError`, and `asyncHandler` in `src/utils/`
+- **Error Handling:** Implemented a global `errorHandler` middleware.
+- **Server Updates:** Integrated the DB connection and error handling into `server.js`.
+
+### Visual Verification
+Using the `browser_subagent`, we started the server and verified that the basic `/api/health` endpoint successfully responded before the local MongoDB connection retry inevitably failed (as MongoDB is not running locally).
+
+**API Response Verification Screenshot:**
+![Backend Health Check API Response](C:\Users\RH364\.gemini\antigravity-ide\brain\781cab89-066c-4c4f-aa3d-6efea3d7d29b\health_check_api_1788886371500.png)
+
+**Subagent Recording:**
+![Subagent Test Execution](C:\Users\RH364\.gemini\antigravity-ide\brain\781cab89-066c-4c4f-aa3d-6efea3d7d29b\phase2_health_check_1788886345671.webp)
+
+## Phase 3: Authentication + Users Walkthrough
+
+> [!NOTE]
+> Phase 3 successfully implemented full-stack JWT-based authentication. We have established secure hashing on the backend, role-based protection, and built the "Dark Cosmic Mission Control" login and registration interfaces on the frontend.
+
+### Work Completed
+
+#### Backend
+- **Security Utilities:** Created `hashPassword`, `comparePassword`, and `generateToken` (JWT) in `src/utils`.
+- **Middleware:** Created `requireAuth` (JWT validation) and `requireRole` in `src/middleware/auth.js`.
+- **Controllers & Routes:** Created endpoints for Registration, Login, and Profile fetching in `src/controllers/authController.js`. Mounted to `/api/auth`.
+
+#### Frontend
+- **API Client:** Setup an Axios instance with dynamic Authorization headers interceptors in `lib/apiClient.js`.
+- **State Management:** Built `AuthContext` to handle user session, loading states, and auth actions.
+- **Routing:** Configured React Router in `App.jsx` and created a `ProtectedRoute` component.
+- **UI Pages Built:**
+  - `Login.jsx` (Mission Control Login)
+  - `Register.jsx` (Operative Registration)
+  - `Profile.jsx` (Operative Profile)
+
+### Visual Verification
+Using the `browser_subagent`, we tested the Vite development server to verify the CSS configuration loaded the "Dark Cosmic Mission Control" theme, and that the routing successfully displayed our forms.
+
+**Register Page Screenshot:**
+![Operative Registration Page](C:\Users\RH364\.gemini\antigravity-ide\brain\781cab89-066c-4c4f-aa3d-6efea3d7d29b\register_page_1788887836781.png)
+
+**Login Page Screenshot:**
+![Mission Control Login Page](C:\Users\RH364\.gemini\antigravity-ide\brain\781cab89-066c-4c4f-aa3d-6efea3d7d29b\login_page_1788887853348.png)
+
+**Subagent Test Execution Recording:**
+![Subagent Test Execution](C:\Users\RH364\.gemini\antigravity-ide\brain\781cab89-066c-4c4f-aa3d-6efea3d7d29b\phase3_auth_ui_test_1788887799471.webp)
+
+> [!TIP]
+> The groundwork is fully prepared for **Phase 4: Satellite + Mission Management**, where we will create the core CRUD operations for our fleet and missions.

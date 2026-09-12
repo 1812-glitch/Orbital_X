@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --color-deep-navy: #0A0F1F;
+  --color-cosmic-blue: #121C36;
+  --color-tech-cyan: #00F0FF;
+  --color-alert-red: #FF2A2A;
+  --color-status-green: #00FF66;
+  --color-warn-amber: #FFB000;
+  
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'Fira Code', monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-deep-navy text-gray-200 antialiased selection:bg-tech-cyan selection:text-deep-navy;
+  }
+}
+
+@layer utilities {
+  .glassmorphism {
+    @apply bg-cosmic-blue/60 backdrop-blur-md border border-tech-cyan/20;
+  }
+  .subtle-glow {
+    @apply shadow-[0_0_15px_rgba(0,240,255,0.15)];
+  }
+}

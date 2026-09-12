@@ -1,0 +1,25 @@
+{
+  "name": "orbitalx-workspace",
+  "version": "1.0.0",
+  "description": "OrbitalX Spacecraft Fleet Management & 3D CubeSat Design System",
+  "private": true,
+  "scripts": {
+    "start:backend": "npm --prefix OrbitalX/backend run dev",
+    "start:frontend": "npm --prefix OrbitalX/frontend run dev",
+    "build": "npm --prefix OrbitalX/frontend run build",
+    "test:security": "node OrbitalX/backend/tests/securityAudit.js",
+    "docker:up": "docker-compose up --build -d",
+    "docker:down": "docker-compose down"
+  },
+  "keywords": [
+    "satellite",
+    "cubesat",
+    "aerospace",
+    "telemetry",
+    "threejs",
+    "react19",
+    "mission-control"
+  ],
+  "author": "OrbitalX Team",
+  "license": "MIT"
+}

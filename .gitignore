@@ -1,0 +1,58 @@
+# ===================================================
+# OrbitalX Git Ignore Rules (Conflict Prevention)
+# ===================================================
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Production build outputs
+dist/
+**/dist/
+build/
+**/build/
+out/
+
+# Environment Variables & Secrets (Keep local)
+.env
+.env.*
+!.env.example
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+
+# Database Data Volumes
+mongo_data/
+**/mongo_data/
+data/
+*.sqlite
+
+# Application & npm logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor & IDE settings
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Temporary Agent / Browser Cache
+.tempmediaStorage/
+.system_generated/
+scratch/

@@ -1,0 +1,57 @@
+# Phase 1: Project Setup Walkthrough
+
+> [!NOTE]
+> This phase focused entirely on foundational setup, folder structuring, and backend API initialization. As a result, there is no UI to demonstrate visually yet. Starting from Phase 3 (Authentication + Users), this walkthrough will feature browser screenshots and video recordings.
+
+## Project Structure Overview
+
+I initialized the workspace following the "Monolith" separation requirement:
+```
+OrbitalX/
+├── frontend/ (Vite + React + TailwindCSS)
+└── backend/  (Node.js + Express + Mongoose)
+```
+
+## Work Completed
+
+### 1. Frontend Setup
+- **Framework Initialization:** Created a pure JavaScript React project via Vite.
+- **Styling Configuration:** Installed `tailwindcss`, `postcss`, and `autoprefixer`.
+- **Theming:** Defined the "Dark Cosmic Mission Control" theme inside [`tailwind.config.js`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/frontend/tailwind.config.js).
+- **Environment Setup:** Configured [`frontend/.env.local`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/frontend/.env.local) to point to the backend's `http://localhost:5000`.
+
+### 2. Backend Setup
+- **Server Scaffold:** Built the foundational Express server in [`backend/server.js`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/OrbitalX/backend/server.js) with CORS, Helmet, and Morgan.
+- **Dependencies:** Installed Mongoose, `dotenv`, and required security middleware.
+- **Health Check API:** Created an initial `/api/health` endpoint to verify the server is running correctly.
+
+### 3. Server Verification
+Both development servers were verified to run without errors via package scripts:
+- Frontend: `npm run dev`
+- Backend: `npm run dev`
+
+## Phase 2: Database + Backend Foundation Walkthrough
+
+> [!NOTE]
+> Phase 2 implemented the core data layer. We built all 10 Mongoose schemas matching the OrbitalX master prompt specifications and integrated standard API utility structures.
+
+### Work Completed
+- **MongoDB Connection:** Implemented `connectDB` in `src/config/db.js`
+- **Mongoose Models:** Created structured schemas in `src/models/` for:
+  - `User`, `Satellite`, `Mission`, `Telemetry`, `GroundStation`
+  - `Alert`, `Command`, `Communication`, `Notification`, `AuditLog`
+- **API Utilities:** Established reusable `ApiResponse`, `ApiError`, and `asyncHandler` in `src/utils/`
+- **Error Handling:** Implemented a global `errorHandler` middleware.
+- **Server Updates:** Integrated the DB connection and error handling into `server.js`.
+
+### Visual Verification
+Using the `browser_subagent`, we started the server and verified that the basic `/api/health` endpoint successfully responded before the local MongoDB connection retry inevitably failed (as MongoDB is not running locally).
+
+**API Response Verification Screenshot:**
+![Backend Health Check API Response](C:\Users\RH364\.gemini\antigravity-ide\brain\781cab89-066c-4c4f-aa3d-6efea3d7d29b\health_check_api_1788886371500.png)
+
+**Subagent Recording:**
+![Subagent Test Execution](C:\Users\RH364\.gemini\antigravity-ide\brain\781cab89-066c-4c4f-aa3d-6efea3d7d29b\phase2_health_check_1788886345671.webp)
+
+> [!TIP]
+> With the database foundation laid, we are fully prepared for **Phase 3: Authentication + Users**, where we will create the actual registration and login functionality.

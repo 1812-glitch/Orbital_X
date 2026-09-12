@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: orbitalx_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - orbitalx_network
+
+  backend:
+    build:
+      context: ./OrbitalX/backend
+      dockerfile: Dockerfile
+    container_name: orbitalx_backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongodb:27017/orbitalx
+      - JWT_SECRET=orbitalx_super_secret_jwt_key_2026_aerospace
+      - SIMULATION_INTERVAL=10000
+    depends_on:
+      - mongodb
+    networks:
+      - orbitalx_network
+
+  frontend:
+    build:
+      context: ./OrbitalX/frontend
+      dockerfile: Dockerfile
+    container_name: orbitalx_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - orbitalx_network
+
+networks:
+  orbitalx_network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local
