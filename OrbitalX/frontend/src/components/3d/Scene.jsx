@@ -64,7 +64,25 @@ export default function Scene({
     return '#00F0FF'; // Cyan
   };
 
-  // Format fleet data for Globe with sleek, snug altitude scaling (tight to Earth)
+  // Compute visual 3D altitude directly and proportionately from real physical altitude (km)
+  const calculateVisualAltitude = (altitudeKm, orbitType = 'LEO') => {
+    let km = Number(altitudeKm);
+    if (!km || isNaN(km) || km < 100) {
+      if (orbitType === 'GEO') km = 35786;
+      else if (orbitType === 'MEO') km = 20200;
+      else km = 550;
+    }
+
+    // Proportional physical curve:
+    // LEO (400 - 1,000 km, e.g. CubeSats): ~0.065 to 0.085 (snug to Earth atmosphere)
+    // MEO (10,000 - 20,000 km, e.g. GPS / Beta-2): ~0.30 to 0.44 (medium orbital shell)
+    // GEO (~35,786 km, e.g. Weather / Gamma-3): ~0.65 (outer geostationary belt)
+    const clampedKm = Math.max(200, Math.min(42000, km));
+    const normalized = Math.pow(clampedKm / 36000, 0.72);
+    return parseFloat((0.045 + 0.60 * normalized).toFixed(4));
+  };
+
+  // Format fleet data for Globe with altitude strictly mapped to real physical altitude
   const satellites = useMemo(() => {
     return fleetData
       .filter(d => d.telemetry)
@@ -75,16 +93,15 @@ export default function Scene({
         const slotColor = isSelected ? SAT_SLOT_COLORS[slotIdx] : null;
         const isCubeSat = (d.satellite.type && d.satellite.type.includes('CUBE')) || satId.includes('CUBE');
         
-        // Sleek altitude scale: snug to Earth surface (never sticking out into deep space)
-        let alt = 0.035;
-        if (d.satellite.orbitType === 'GEO') alt = 0.085;
-        else if (d.satellite.orbitType === 'MEO') alt = 0.06;
-        else if (isCubeSat) alt = 0.032;
+        // Accurate altitude scaling according to real physical telemetry
+        const realAltitudeKm = d.telemetry.altitude || (d.satellite.orbitRadius ? d.satellite.orbitRadius - 6371 : null);
+        const alt = calculateVisualAltitude(realAltitudeKm, d.satellite.orbitType);
 
         return {
           lat: d.telemetry.latitude,
           lng: d.telemetry.longitude,
           alt,
+          altitudeKm: Math.round(realAltitudeKm || (d.satellite.orbitType === 'GEO' ? 35786 : d.satellite.orbitType === 'MEO' ? 20200 : 550)),
           id: satId,
           name: d.satellite.name,
           type: d.satellite.type || (isCubeSat ? 'CUBESAT' : 'SATELLITE'),
@@ -220,7 +237,7 @@ export default function Scene({
             </div>
             <div style="color: #d1d5db; font-size: 10px; margin-bottom: 2px;">${d.name} (${d.type})</div>
             <div style="color: #9ca3af; font-size: 10px;">
-              STATUS: <span style="color: ${getHealthColor(d)}; font-weight: bold;">${d.status}</span> | ALT: ${Math.round(d.alt * 10000)} km
+              STATUS: <span style="color: ${getHealthColor(d)}; font-weight: bold;">${d.status}</span> | ALT: ${d.altitudeKm ? d.altitudeKm.toLocaleString() : '550'} km (${d.type})
             </div>
             ${d.isSelected ? `
               <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #374151; color: #00FF66; font-size: 9px;">

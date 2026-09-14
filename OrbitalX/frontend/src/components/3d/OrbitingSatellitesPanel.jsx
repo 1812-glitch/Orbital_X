@@ -394,7 +394,7 @@ export default function OrbitingSatellitesPanel({
                   <div className="mt-2.5 pt-2 border-t border-gray-800/60 grid grid-cols-3 gap-2 text-[10px] font-mono text-gray-400">
                     <div>
                       <span className="text-gray-500">ALT: </span>
-                      <span className="text-gray-200">{Math.round(tel.altitude || 550)} km</span>
+                      <span className="text-gray-200">{Math.round(tel.altitude || 550).toLocaleString()} km</span>
                     </div>
                     <div>
                       <span className="text-gray-500">VEL: </span>

@@ -12,10 +12,12 @@ const generateMockTelemetry = async () => {
     if (!satellites.length) return;
 
     const telemetryRecords = satellites.map(sat => {
-      // Base values depending on orbit type
+      // Base values accurately depending on orbit type
       const isLEO = sat.orbitType === 'LEO';
-      const baseAlt = isLEO ? 500 : 35000;
-      const baseSpeed = isLEO ? 7.5 : 3.0;
+      const isMEO = sat.orbitType === 'MEO';
+      const isGEO = sat.orbitType === 'GEO';
+      const baseAlt = isLEO ? 550 : isMEO ? 20200 : 35786;
+      const baseSpeed = isLEO ? 7.6 : isMEO ? 3.88 : 3.07;
 
       let temperature = parseFloat((Math.random() * 40 - 10).toFixed(2)); // Normal: -10 to 30 C
       let battery = Math.floor(Math.random() * 20 + 80); // Normal: 80 - 100%
@@ -34,7 +36,7 @@ const generateMockTelemetry = async () => {
       const incRad = (sat.inclination || 51.6) * (Math.PI / 180);
       const satSeed = sat.satelliteId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
       const nodeLng = ((satSeed * 73) % 360) * (Math.PI / 180); // Fixed Right Ascension of Ascending Node
-      const periodSec = isLEO ? 5400 : 86400; // 90 min for LEO, 24 hr for GEO
+      const periodSec = isLEO ? 5700 : isMEO ? 43200 : 86400; // 95 min for LEO, 12 hr for MEO, 24 hr for GEO
       const meanMotion = (2 * Math.PI) / periodSec;
       const phaseOffset = (satSeed * 1.5) % (2 * Math.PI);
       const u = (nowSec * meanMotion + phaseOffset) % (2 * Math.PI); // Angle along orbital plane
