@@ -39,7 +39,17 @@ export default function OrbitingSatellitesPanel({
     return idx !== -1 ? SAT_SLOT_COLORS[idx] : null;
   };
 
-  // Find ground stations connected to a satellite
+  // Angular distance helper in degrees
+  const getAngularDist = (lat1, lng1, lat2, lng2) => {
+    const rlat1 = (lat1 * Math.PI) / 180;
+    const rlng1 = (lng1 * Math.PI) / 180;
+    const rlat2 = (lat2 * Math.PI) / 180;
+    const rlng2 = (lng2 * Math.PI) / 180;
+    const cosDist = Math.sin(rlat1) * Math.sin(rlat2) + Math.cos(rlat1) * Math.cos(rlat2) * Math.cos(rlng1 - rlng2);
+    return (Math.acos(Math.max(-1, Math.min(1, cosDist))) * 180) / Math.PI;
+  };
+
+  // Find ground stations connected to a satellite with Line-of-Sight (LOS) status
   const getConnectedGroundStations = (sat) => {
     if (!groundStations || groundStations.length === 0) return [];
     
@@ -52,45 +62,18 @@ export default function OrbitingSatellitesPanel({
       });
     });
 
-    // Also calculate proximity/elevation line-of-sight if telemetry coordinates exist
-    if (sat.telemetry) {
-      const { latitude, longitude } = sat.telemetry;
-      const connectedByProximity = groundStations.filter(gs => {
-        const dx = latitude - gs.latitude;
-        const dy = longitude - gs.longitude;
-        const angularDist = Math.sqrt(dx * dx + dy * dy);
-        return angularDist < 60; // In communication footprint
-      });
+    const lat = sat.telemetry?.latitude ?? 0;
+    const lng = sat.telemetry?.longitude ?? 0;
 
-      // Merge and deduplicate
-      const combined = [...connectedByDb];
-      connectedByProximity.forEach(gs => {
-        if (!combined.some(c => c._id === gs._id || c.stationId === gs.stationId)) {
-          combined.push(gs);
-        }
-      });
-
-      // Ensure every active satellite has at least 1 primary connected station for visual demonstration
-      if (combined.length === 0 && groundStations.length > 0) {
-        // Find nearest station
-        let nearest = groundStations[0];
-        let minDist = Infinity;
-        groundStations.forEach(gs => {
-          const dx = latitude - gs.latitude;
-          const dy = longitude - gs.longitude;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < minDist) {
-            minDist = dist;
-            nearest = gs;
-          }
-        });
-        combined.push(nearest);
-      }
-
-      return combined;
-    }
-
-    return connectedByDb.length > 0 ? connectedByDb : [groundStations[0]];
+    return connectedByDb.map(gs => {
+      const distDeg = getAngularDist(lat, lng, gs.latitude, gs.longitude);
+      const isInSight = distDeg <= 55; // Horizon line-of-sight footprint
+      return {
+        ...gs,
+        isInSight,
+        distKm: Math.round(distDeg * 111)
+      };
+    });
   };
 
   // Filter fleet data
@@ -447,14 +430,18 @@ export default function OrbitingSatellitesPanel({
                       <div 
                         key={gs._id || gs.stationId}
                         className={`flex items-center space-x-1.5 px-2 py-1 rounded text-[10px] font-mono border transition-colors ${
-                          isSelected
-                            ? 'bg-[#00F0FF]/10 text-white border-[#00F0FF]/30'
+                          gs.isInSight
+                            ? 'bg-[#00FF66]/10 text-white border-[#00FF66]/40 shadow-sm'
                             : 'bg-[#12192b] text-gray-400 border-gray-800'
                         }`}
                       >
-                        <Radio size={10} style={{ color: isSelected ? slotColor : '#00F0FF' }} />
+                        <Radio size={10} style={{ color: gs.isInSight ? '#00FF66' : '#6b7280' }} />
                         <span className="font-semibold text-gray-200">{gs.name}</span>
-                        <span className="text-gray-500">({gs.country || 'Relay'})</span>
+                        <span className={`text-[8px] px-1 py-0.2 rounded font-bold uppercase ${
+                          gs.isInSight ? 'bg-[#00FF66]/20 text-[#00FF66]' : 'bg-gray-800 text-gray-500'
+                        }`}>
+                          {gs.isInSight ? 'IN SIGHT' : 'STANDBY'}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -464,11 +451,11 @@ export default function OrbitingSatellitesPanel({
                     <div className="mt-2 p-2 rounded bg-[#0A0F1F]/80 border border-gray-800 text-[10px] font-mono space-y-1">
                       <div className="flex items-center justify-between text-gray-400">
                         <span className="flex items-center space-x-1 text-gray-400">
-                          <Wifi size={10} className="text-[#00FF66]" />
+                          <Wifi size={10} className={connectedStations.some(g => g.isInSight) ? 'text-[#00FF66]' : 'text-gray-500'} />
                           <span>SENDING DOWNLINK TO:</span>
                         </span>
                         <span className="text-white font-bold">
-                          {connectedStations.map(g => g.stationId || g.name.slice(0, 8)).join(', ')}
+                          {connectedStations.filter(g => g.isInSight).map(g => g.name).join(', ') || 'ORBITAL TRANSIT (AWAITING PASS)'}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-gray-400 pt-1 border-t border-gray-800/60">

@@ -29,23 +29,41 @@ const generateMockTelemetry = async () => {
         battery = Math.floor(Math.random() * 10 + 5); // 5 to 15% (Low Power)
       }
 
+      // Continuous Keplerian orbital motion along fixed orbital plane
+      const nowSec = Date.now() / 1000;
+      const incRad = (sat.inclination || 51.6) * (Math.PI / 180);
+      const satSeed = sat.satelliteId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+      const nodeLng = ((satSeed * 73) % 360) * (Math.PI / 180); // Fixed Right Ascension of Ascending Node
+      const periodSec = isLEO ? 5400 : 86400; // 90 min for LEO, 24 hr for GEO
+      const meanMotion = (2 * Math.PI) / periodSec;
+      const phaseOffset = (satSeed * 1.5) % (2 * Math.PI);
+      const u = (nowSec * meanMotion + phaseOffset) % (2 * Math.PI); // Angle along orbital plane
+
+      const sinLat = Math.sin(incRad) * Math.sin(u);
+      const simLat = parseFloat((Math.asin(Math.max(-1, Math.min(1, sinLat))) * (180 / Math.PI)).toFixed(4));
+      
+      const earthRot = (nowSec * (2 * Math.PI / 86400)) % (2 * Math.PI);
+      const lngInPlane = Math.atan2(Math.cos(incRad) * Math.sin(u), Math.cos(u));
+      let simLng = (nodeLng + lngInPlane - earthRot) * (180 / Math.PI);
+      simLng = parseFloat((((((simLng + 180) % 360) + 360) % 360) - 180).toFixed(4));
+
       return {
         satelliteId: sat._id,
         satelliteName: sat.name,
         satelliteIdStr: sat.satelliteId,
         timestamp: new Date(),
         temperature,
-        speed: parseFloat((baseSpeed + (Math.random() * 0.2 - 0.1)).toFixed(2)),
-        altitude: parseFloat((baseAlt + (Math.random() * 10 - 5)).toFixed(2)),
+        speed: parseFloat((baseSpeed + (Math.random() * 0.1 - 0.05)).toFixed(2)),
+        altitude: parseFloat((baseAlt + (Math.random() * 2 - 1)).toFixed(2)),
         distanceFromEarth: parseFloat((baseAlt + 6371).toFixed(2)), // Alt + Earth radius
         battery,
-        signal: Math.floor(Math.random() * 30 - 90), // -90 to -60 dBm
+        signal: Math.floor(Math.random() * 15 - 80), // -80 to -65 dBm
         connectivity,
-        latitude: parseFloat((Math.random() * 180 - 90).toFixed(4)),
-        longitude: parseFloat((Math.random() * 360 - 180).toFixed(4)),
-        health: Math.floor(Math.random() * 10 + 90), // 90-100%
-        cpu: Math.floor(Math.random() * 40 + 20), // 20-60%
-        memory: Math.floor(Math.random() * 30 + 40) // 40-70%
+        latitude: simLat,
+        longitude: simLng,
+        health: Math.floor(Math.random() * 5 + 95), // 95-100%
+        cpu: Math.floor(Math.random() * 20 + 25), // 25-45%
+        memory: Math.floor(Math.random() * 15 + 45) // 45-60%
       };
     });
 

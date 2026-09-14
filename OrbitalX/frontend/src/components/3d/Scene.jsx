@@ -1,7 +1,21 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Globe from 'react-globe.gl';
-import * as THREE from 'three';
 import { SAT_SLOT_COLORS } from './OrbitingSatellitesPanel';
+
+// Helper to calculate angular distance between two lat/lng coordinates in degrees
+const getAngularDistanceDeg = (lat1, lng1, lat2, lng2) => {
+  const rlat1 = (lat1 * Math.PI) / 180;
+  const rlng1 = (lng1 * Math.PI) / 180;
+  const rlat2 = (lat2 * Math.PI) / 180;
+  const rlng2 = (lng2 * Math.PI) / 180;
+  const cosDist = Math.sin(rlat1) * Math.sin(rlat2) + Math.cos(rlat1) * Math.cos(rlat2) * Math.cos(rlng1 - rlng2);
+  return (Math.acos(Math.max(-1, Math.min(1, cosDist))) * 180) / Math.PI;
+};
+
+// Deterministic hash seed for fixed orbital parameters per satellite
+const getSatSeed = (id) => {
+  return String(id).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+};
 
 export default function Scene({ 
   fleetData, 
@@ -39,18 +53,18 @@ export default function Scene({
   useEffect(() => {
     if (globeRef.current) {
       globeRef.current.controls().autoRotate = autoRotate;
-      globeRef.current.controls().autoRotateSpeed = 0.5;
+      globeRef.current.controls().autoRotateSpeed = 0.4;
     }
   }, [autoRotate]);
 
-  // Define colors helper
+  // Define status colors
   const getHealthColor = (d) => {
     if (d.status === 'OFFLINE') return '#FF2A2A'; // Red
     if (d.health < 80 || d.status === 'WARNING') return '#FFB020'; // Yellow
     return '#00F0FF'; // Cyan
   };
 
-  // Format fleet data for Globe
+  // Format fleet data for Globe with sleek, snug altitude scaling (tight to Earth)
   const satellites = useMemo(() => {
     return fleetData
       .filter(d => d.telemetry)
@@ -59,18 +73,25 @@ export default function Scene({
         const slotIdx = selectedSatIds.indexOf(satId);
         const isSelected = slotIdx !== -1;
         const slotColor = isSelected ? SAT_SLOT_COLORS[slotIdx] : null;
+        const isCubeSat = (d.satellite.type && d.satellite.type.includes('CUBE')) || satId.includes('CUBE');
+        
+        // Sleek altitude scale: snug to Earth surface (never sticking out into deep space)
+        let alt = 0.035;
+        if (d.satellite.orbitType === 'GEO') alt = 0.085;
+        else if (d.satellite.orbitType === 'MEO') alt = 0.06;
+        else if (isCubeSat) alt = 0.032;
 
         return {
           lat: d.telemetry.latitude,
           lng: d.telemetry.longitude,
-          alt: Math.max(0.06, (d.telemetry.altitude || 600) / 10000),
+          alt,
           id: satId,
           name: d.satellite.name,
-          type: d.satellite.type || (satId.includes('CUBE') ? 'CUBESAT' : 'SATELLITE'),
+          type: d.satellite.type || (isCubeSat ? 'CUBESAT' : 'SATELLITE'),
           status: d.satellite.status,
           health: d.telemetry.health || 95,
           speed: d.telemetry.speed || 7.6,
-          inclination: d.satellite.inclination || (satId.includes('CUBE') ? 97.4 : 51.6),
+          inclination: d.satellite.inclination || (isCubeSat ? 97.4 : 51.6),
           isSelected,
           slotIdx,
           slotColor
@@ -78,104 +99,79 @@ export default function Scene({
       });
   }, [fleetData, selectedSatIds]);
 
-  // Generate a mathematically accurate 3D closed orbit loop passing through the satellite's exact position
-  const generateOrbitalPath = (sat, numPoints = 120) => {
+  // Stable, fixed 3D orbital trajectory path calculation that NEVER wiggles, jumps or changes
+  const generateFixedOrbitalPath = (sat, numPoints = 120) => {
     const points = [];
-    const lat0 = sat.lat * (Math.PI / 180);
-    const lng0 = sat.lng * (Math.PI / 180);
-    const alt = sat.alt;
     const inclinationDeg = sat.inclination || 51.6;
-    const incRad = inclinationDeg * (Math.PI / 180);
+    const incRad = (inclinationDeg * Math.PI) / 180;
+    
+    // Deterministic fixed ascending node longitude per satellite ID
+    const seed = getSatSeed(sat.id);
+    const nodeLng = ((seed * 73) % 360) * (Math.PI / 180);
+    const alt = sat.alt;
 
-    // Current position vector P on unit sphere
-    const px = Math.cos(lat0) * Math.cos(lng0);
-    const py = Math.sin(lat0);
-    const pz = Math.cos(lat0) * Math.sin(lng0);
-
-    // Tangent velocity direction in orbital plane at inclination incRad
-    let cosLat = Math.cos(lat0);
-    if (Math.abs(cosLat) < 0.001) cosLat = 0.001;
-    let sinPsi = Math.cos(incRad) / cosLat;
-    if (sinPsi > 1) sinPsi = 1;
-    if (sinPsi < -1) sinPsi = -1;
-    const cosPsi = Math.sqrt(Math.max(0, 1 - sinPsi * sinPsi));
-
-    // Local East and North basis vectors
-    const vx = sinPsi * (-Math.sin(lng0)) + cosPsi * (-Math.sin(lat0) * Math.cos(lng0));
-    const vy = cosPsi * Math.cos(lat0);
-    const vz = sinPsi * (Math.cos(lng0)) + cosPsi * (-Math.sin(lat0) * Math.sin(lng0));
-
-    const vLen = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
-    const tx = vx / vLen;
-    const ty = vy / vLen;
-    const tz = vz / vLen;
-
-    // Generate circle coordinates
     for (let i = 0; i <= numPoints; i++) {
-      const theta = (i / numPoints) * 2 * Math.PI;
-      const rx = px * Math.cos(theta) + tx * Math.sin(theta);
-      const ry = py * Math.cos(theta) + ty * Math.sin(theta);
-      const rz = pz * Math.cos(theta) + tz * Math.sin(theta);
+      const u = (i / numPoints) * 2 * Math.PI;
+      // Fixed spherical coordinates in stable Keplerian orbital plane
+      const x = Math.cos(nodeLng) * Math.cos(u) - Math.sin(nodeLng) * Math.sin(u) * Math.cos(incRad);
+      const y = Math.sin(u) * Math.sin(incRad);
+      const z = Math.sin(nodeLng) * Math.cos(u) + Math.cos(nodeLng) * Math.sin(u) * Math.cos(incRad);
 
-      const latDeg = Math.asin(Math.max(-1, Math.min(1, ry))) * (180 / Math.PI);
-      const lngDeg = Math.atan2(rz, rx) * (180 / Math.PI);
+      const latDeg = Math.asin(Math.max(-1, Math.min(1, y))) * (180 / Math.PI);
+      const lngDeg = Math.atan2(z, x) * (180 / Math.PI);
       points.push([latDeg, lngDeg, alt]);
     }
     return points;
   };
 
-  // Memoize 3D Orbital Trajectory Paths for selected satellites (max 3)
+  // Memoize stable 3D Orbital Trajectory Paths for selected satellites (max 3)
   const selectedOrbitalPaths = useMemo(() => {
+    if (!showRings) return [];
     const selected = satellites.filter(s => s.isSelected);
     return selected.map((sat) => ({
       id: sat.id,
       name: `${sat.id} Orbital Path`,
       color: sat.slotColor,
-      stroke: 2.8,
-      coords: generateOrbitalPath(sat, 120)
+      stroke: 1.4, // Sleek, thin laser line
+      coords: generateFixedOrbitalPath(sat, 120)
     }));
-  }, [satellites]);
+  }, [satellites, showRings]);
 
-  // Memoize targeted communication & signal transmission arcs
+  // Communication & signal transmission beams (ONLY rendered when in line of sight)
   const arcs = useMemo(() => {
     if (!showUplinks || satellites.length === 0 || groundStations.length === 0) return [];
     
     const calculatedArcs = [];
-    const selectedSats = satellites.filter(s => s.isSelected);
-    // If satellites are explicitly selected, only render transmission arcs for those (up to 3)
-    // Otherwise fallback to nearest links for general visual context
-    const activeTargets = selectedSats.length > 0 ? selectedSats : satellites.slice(0, 3);
+    // Only generate communication beams for SELECTED satellites
+    const activeTargets = satellites.filter(s => s.isSelected);
 
     activeTargets.forEach(sat => {
-      // Find connected stations
-      const connected = groundStations.filter(gs => {
-        if (gs.connectedSatellites && gs.connectedSatellites.some(s => {
+      // Find connected stations that are physically in Line of Sight (LOS <= 55 degrees)
+      const inRangeStations = groundStations.filter(gs => {
+        // Must be a designated connected station or nearby station
+        const isDesignated = gs.connectedSatellites && gs.connectedSatellites.some(s => {
           const id = typeof s === 'object' ? (s.satelliteId || s._id) : s;
           return id === sat.id;
-        })) {
-          return true;
-        }
-        const dx = sat.lat - gs.latitude;
-        const dy = sat.lng - gs.longitude;
-        return Math.sqrt(dx * dx + dy * dy) < 65;
+        });
+
+        const distDeg = getAngularDistanceDeg(sat.lat, sat.lng, gs.latitude, gs.longitude);
+        // Only establish active radio link if station is in line of sight (<= 55 deg above horizon)
+        return isDesignated && distDeg <= 55;
       });
 
-      const stationsToLink = connected.length > 0 ? connected : [groundStations[0]];
-
-      stationsToLink.forEach(gs => {
-        const color = sat.slotColor || getHealthColor(sat);
+      // If designated station is currently in LOS, render clean, low-altitude laser beam
+      inRangeStations.forEach(gs => {
+        const color = sat.slotColor || '#00F0FF';
         calculatedArcs.push({
           satId: sat.id,
           startLat: sat.lat,
           startLng: sat.lng,
           endLat: gs.latitude,
           endLng: gs.longitude,
-          color: [color, `${color}40`],
+          color: [color, `${color}60`],
           satColor: color,
           stationName: gs.name,
-          stationId: gs.stationId,
-          stroke: sat.isSelected ? 1.8 : 0.6,
-          isHighPriority: sat.isSelected
+          stationId: gs.stationId
         });
       });
     });
@@ -183,7 +179,7 @@ export default function Scene({
     return calculatedArcs;
   }, [showUplinks, satellites, groundStations]);
 
-  // Stations receiving active signals for radar ping animation
+  // Stations receiving active signals for radar broadcast rings
   const activeReceivingStations = useMemo(() => {
     const activeStationNames = new Set(arcs.map(a => a.stationName));
     return groundStations.filter(gs => activeStationNames.has(gs.name));
@@ -209,8 +205,8 @@ export default function Scene({
         pointLng="lng"
         pointAltitude="alt"
         pointColor={d => d.slotColor || getHealthColor(d)}
-        pointRadius={d => d.isSelected ? 0.45 : 0.22}
-        pointResolution={20}
+        pointRadius={d => d.isSelected ? 0.32 : 0.18}
+        pointResolution={16}
         onPointClick={(d) => {
           if (onSelectSatellite) {
             onSelectSatellite(d.id);
@@ -228,7 +224,7 @@ export default function Scene({
             </div>
             ${d.isSelected ? `
               <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #374151; color: #00FF66; font-size: 9px;">
-                ● TRANSMITTING SIGNALS TO GROUND NETWORK
+                ● ACTIVE ORBITAL PATH PROJECTED
               </div>
             ` : `
               <div style="margin-top: 4px; color: #6b7280; font-size: 9px;">Click to toggle 3D orbital trajectory</div>
@@ -236,26 +232,26 @@ export default function Scene({
           </div>
         ` : () => ''}
 
-        // 2. 3D Orbital Trajectory Paths for Selected Satellites (Max 3)
+        // 2. Stable 3D Orbital Trajectory Paths (Max 3, sleek & close to Earth)
         pathsData={selectedOrbitalPaths}
         pathPoints="coords"
         pathPointLat={p => p[0]}
         pathPointLng={p => p[1]}
         pathPointAlt={p => p[2]}
         pathColor={d => d.color}
-        pathStroke={d => d.stroke || 2.8}
-        pathDashLength={0.15}
+        pathStroke={1.4}
+        pathDashLength={0.12}
         pathDashGap={0.03}
-        pathDashAnimateTime={2500}
+        pathDashAnimateTime={3000}
         pathResolution={3}
 
-        // 3. Ground Stations (Labels & Positioning)
+        // 3. Ground Stations (Clean Labels & Dots)
         labelsData={groundStations}
         labelLat="latitude"
         labelLng="longitude"
         labelText="name"
-        labelSize={1.4}
-        labelDotRadius={0.6}
+        labelSize={1.2}
+        labelDotRadius={0.4}
         labelColor={(gs) => {
           const isReceiving = arcs.some(a => a.stationName === gs.name);
           return isReceiving ? '#00FF66' : '#00F0FF';
@@ -270,52 +266,27 @@ export default function Scene({
           </div>
         `}
 
-        // 4. Active Ground Station Radar Broadcast Rings
+        // 4. Subtle Ground Station Radar Broadcast Rings for stations in active contact
         ringsData={activeReceivingStations}
         ringLat="latitude"
         ringLng="longitude"
-        ringColor={() => (t) => `rgba(0, 255, 102, ${Math.max(0, (1 - t) * 0.7)})`}
-        ringMaxRadius={7}
-        ringPropagationSpeed={2.5}
-        ringRepeatPeriod={1200}
+        ringColor={() => (t) => `rgba(0, 255, 102, ${Math.max(0, (1 - t) * 0.5)})`}
+        ringMaxRadius={4}
+        ringPropagationSpeed={2}
+        ringRepeatPeriod={1400}
 
-        // 5. Communication Beams (Signal Transmission Arcs)
+        // 5. Line-of-Sight Laser Communication Beams (Low altitude, directly to station)
         arcsData={arcs}
         arcStartLat="startLat"
         arcStartLng="startLng"
         arcEndLat="endLat"
         arcEndLng="endLng"
         arcColor="color"
-        arcDashLength={0.4}
-        arcDashGap={1.2}
-        arcDashAnimateTime={1600}
-        arcAltitudeAutoScale={0.25}
-        arcStroke={d => d.stroke}
-        
-        // 6. Generic Orbital Rings for all assets when showRings is toggled
-        customLayerData={showRings && selectedSatIds.length === 0 ? satellites : []}
-        customThreeObject={(d) => {
-          const r = 1 + d.alt; 
-          const geometry = new THREE.RingGeometry(r - 0.004, r + 0.004, 64);
-          const material = new THREE.MeshBasicMaterial({ 
-            color: getHealthColor(d), 
-            transparent: true, 
-            opacity: 0.12,
-            side: THREE.DoubleSide
-          });
-          const mesh = new THREE.Mesh(geometry, material);
-          const phi = (90 - d.lat) * (Math.PI / 180);
-          const theta = (d.lng + 180) * (Math.PI / 180);
-          
-          mesh.lookAt(
-            new THREE.Vector3(
-               r * Math.sin(phi) * Math.cos(theta),
-               r * Math.cos(phi),
-               r * Math.sin(phi) * Math.sin(theta)
-            )
-          );
-          return mesh;
-        }}
+        arcAltitude={0.025} // Low altitude direct laser link (NEVER shoots out into space)
+        arcStroke={1.0}
+        arcDashLength={0.3}
+        arcDashGap={1.0}
+        arcDashAnimateTime={1500}
       />
       
       {/* Viewport Overlay UI: Status Badge */}
