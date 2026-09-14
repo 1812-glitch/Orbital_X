@@ -20,8 +20,12 @@ const getLatestTelemetry = asyncHandler(async (req, res) => {
           _id: sat._id,
           name: sat.name,
           satelliteId: sat.satelliteId,
+          type: sat.type || (sat.satelliteId.includes('CUBE') ? 'CUBESAT' : 'COMMUNICATION'),
           orbitType: sat.orbitType,
-          status: sat.status
+          status: sat.status,
+          inclination: sat.inclination || 51.6,
+          orbitRadius: sat.orbitRadius || 6871,
+          orbitSpeed: sat.orbitSpeed || 7.6
         },
         telemetry: tel || null
       };

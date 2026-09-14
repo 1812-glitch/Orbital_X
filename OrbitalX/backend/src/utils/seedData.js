@@ -24,14 +24,16 @@ const seedData = async () => {
       });
       console.log('Admin user seeded.');
 
-      // Create satellites
+      // Create satellites (including CubeSats)
       const satellites = [
-        { name: 'Alpha One', satelliteId: 'SAT-ALPHA-1', type: 'COMMUNICATION', orbitType: 'LEO', status: 'ACTIVE' },
-        { name: 'Beta Two', satelliteId: 'SAT-BETA-2', type: 'OBSERVATION', orbitType: 'MEO', status: 'WARNING' },
-        { name: 'Gamma Three', satelliteId: 'SAT-GAMMA-3', type: 'WEATHER', orbitType: 'GEO', status: 'OFFLINE' },
+        { name: 'Alpha One', satelliteId: 'SAT-ALPHA-1', type: 'COMMUNICATION', orbitType: 'LEO', status: 'ACTIVE', inclination: 51.6, orbitRadius: 6871, orbitSpeed: 7.6 },
+        { name: 'Beta Two', satelliteId: 'SAT-BETA-2', type: 'OBSERVATION', orbitType: 'MEO', status: 'ACTIVE', inclination: 55.0, orbitRadius: 26560, orbitSpeed: 3.8 },
+        { name: 'Gamma Three', satelliteId: 'SAT-GAMMA-3', type: 'WEATHER', orbitType: 'GEO', status: 'ACTIVE', inclination: 0.1, orbitRadius: 42164, orbitSpeed: 3.1 },
+        { name: 'CubeSat Ion-X', satelliteId: 'CUBESAT-ION', type: 'CUBESAT_3U', orbitType: 'LEO', status: 'ACTIVE', inclination: 97.4, orbitRadius: 6920, orbitSpeed: 7.5 },
+        { name: 'CubeSat Aero-6', satelliteId: 'CUBESAT-AERO', type: 'CUBESAT_6U', orbitType: 'LEO', status: 'ACTIVE', inclination: 45.0, orbitRadius: 6890, orbitSpeed: 7.6 }
       ];
       const insertedSatellites = await Satellite.insertMany(satellites);
-      console.log('Satellites seeded.');
+      console.log('Satellites and CubeSats seeded.');
 
       // Create a mission and assign satellites
       await Mission.create({
@@ -45,7 +47,7 @@ const seedData = async () => {
       });
       console.log('Mission seeded.');
 
-      // Create ground stations matching Ground Stations.png
+      // Create ground stations matching Ground Stations
       const groundStations = [
         { 
           name: 'Ground Station Alpha', 
@@ -55,7 +57,7 @@ const seedData = async () => {
           longitude: 77.5946, 
           status: 'ACTIVE',
           signalQuality: 98,
-          connectedSatellites: insertedSatellites.slice(0, 2).map(s => s._id),
+          connectedSatellites: [insertedSatellites[0]._id, insertedSatellites[3]._id],
           lastContact: new Date(Date.now() - 5 * 60000),
           nextContact: new Date(Date.now() + 83 * 60000)
         },
@@ -65,11 +67,11 @@ const seedData = async () => {
           country: 'USA', 
           latitude: 29.5502, 
           longitude: -95.097, 
-          status: 'DEGRADED',
-          signalQuality: 64,
-          connectedSatellites: insertedSatellites.slice(2, 3).map(s => s._id),
-          lastContact: new Date(Date.now() - 72 * 60000),
-          nextContact: new Date(Date.now() + 110 * 60000)
+          status: 'ACTIVE',
+          signalQuality: 88,
+          connectedSatellites: [insertedSatellites[1]._id, insertedSatellites[4]._id],
+          lastContact: new Date(Date.now() - 25 * 60000),
+          nextContact: new Date(Date.now() + 60 * 60000)
         },
         { 
           name: 'Toulouse Center', 
@@ -78,8 +80,8 @@ const seedData = async () => {
           latitude: 43.6047, 
           longitude: 1.4442, 
           status: 'ACTIVE',
-          signalQuality: 92,
-          connectedSatellites: insertedSatellites.slice(0, 3).map(s => s._id),
+          signalQuality: 94,
+          connectedSatellites: [insertedSatellites[0]._id, insertedSatellites[2]._id, insertedSatellites[3]._id],
           lastContact: new Date(Date.now() - 12 * 60000),
           nextContact: new Date(Date.now() + 45 * 60000)
         },
@@ -90,10 +92,10 @@ const seedData = async () => {
           latitude: -35.4014, 
           longitude: 148.9817, 
           status: 'ACTIVE',
-          signalQuality: 88,
-          connectedSatellites: [],
-          lastContact: new Date(Date.now() - 95 * 60000),
-          nextContact: new Date(Date.now() + 160 * 60000)
+          signalQuality: 91,
+          connectedSatellites: [insertedSatellites[1]._id, insertedSatellites[4]._id],
+          lastContact: new Date(Date.now() - 18 * 60000),
+          nextContact: new Date(Date.now() + 50 * 60000)
         },
       ];
       await GroundStation.insertMany(groundStations);
