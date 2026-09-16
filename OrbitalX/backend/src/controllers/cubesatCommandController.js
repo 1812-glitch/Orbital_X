@@ -29,6 +29,7 @@ const cubeSatStates = {
     battery: 89.2, // %
     propellant: 94.5, // %
     solarPanelsDeployed: true,
+    heaterActive: false,
     attitude: {
       roll: 0.5,
       pitch: -1.1,
@@ -73,6 +74,7 @@ const cubeSatStates = {
     battery: 92.0,
     propellant: 98.0,
     solarPanelsDeployed: true,
+    heaterActive: false,
     attitude: {
       roll: 1.2,
       pitch: 0.8,
@@ -251,10 +253,28 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
 
     case 'CYCLE_HEATERS':
     case 'HEATERS_ON':
-      sat.temperature.bus = parseFloat((sat.temperature.bus + 5.8).toFixed(1));
-      sat.temperature.battery = parseFloat((sat.temperature.battery + 4.2).toFixed(1));
-      sat.load.busPower = parseFloat((sat.load.busPower + 8.5).toFixed(1));
-      responseText = `Thermal management heating loops energized. Internal bus temperature elevated to ${sat.temperature.bus}°C.`;
+    case 'TOGGLE_HEATERS':
+    case 'HEATERS':
+      sat.heaterActive = !sat.heaterActive;
+      if (sat.heaterActive) {
+        sat.temperature.bus = parseFloat((sat.temperature.bus + 5.8).toFixed(1));
+        sat.temperature.battery = parseFloat((sat.temperature.battery + 4.2).toFixed(1));
+        sat.load.busPower = parseFloat((sat.load.busPower + 8.5).toFixed(1));
+        responseText = `Thermal management heating loops ENERGIZED. Internal bus temperature elevated to ${sat.temperature.bus}°C. Yellow heater indicator ON.`;
+      } else {
+        sat.temperature.bus = parseFloat((sat.temperature.bus - 4.1).toFixed(1));
+        sat.temperature.battery = parseFloat((sat.temperature.battery - 3.2).toFixed(1));
+        sat.load.busPower = parseFloat(Math.max(12, sat.load.busPower - 8.5).toFixed(1));
+        responseText = `Thermal management heaters DE-ENERGIZED. Subsystems cooling toward thermal balance. Yellow heater indicator OFF.`;
+      }
+      break;
+
+    case 'HEATERS_OFF':
+      sat.heaterActive = false;
+      sat.temperature.bus = parseFloat((sat.temperature.bus - 4.1).toFixed(1));
+      sat.temperature.battery = parseFloat((sat.temperature.battery - 3.2).toFixed(1));
+      sat.load.busPower = parseFloat(Math.max(12, sat.load.busPower - 8.5).toFixed(1));
+      responseText = `Thermal management heaters powered OFF. Yellow heater indicator OFF.`;
       break;
 
     case 'PING_DIAGNOSTICS':

@@ -23,7 +23,12 @@ import {
   Activity,
   HardDrive,
   Globe2,
-  Box
+  Box,
+  PanelRightClose,
+  PanelRightOpen,
+  ChevronRight,
+  ChevronLeft,
+  SlidersHorizontal
 } from 'lucide-react';
 import CubeSatSimulationCanvas from './CubeSatSimulationCanvas';
 import CubeSatGlobeView from './CubeSatGlobeView';
@@ -42,6 +47,11 @@ export default function CubeSatSimulator() {
   const [groundStations, setGroundStations] = useState([]);
   const [warpSpeed, setWarpSpeed] = useState(15);
   const [liveCoords, setLiveCoords] = useState(null);
+  
+  // Collapsible sidebar state (User Request: convert 2 boxes to closable sidebar & make cubesat area bigger)
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState('ALL'); // 'ALL' | 'COMMANDS' | 'STREAM'
+
   const terminalEndRef = useRef(null);
 
   // Load ground stations once on mount
@@ -87,10 +97,36 @@ export default function CubeSatSimulator() {
   const handleSendCommand = async (commandName, params = {}) => {
     if (isExecuting) return;
     setIsExecuting(true);
+    const cmdUpper = commandName.toUpperCase();
 
-    if (['COLD_GAS_THRUST', 'ORBITAL_BOOST', 'THRUST'].includes(commandName.toUpperCase())) {
+    // 1. Instant Optimistic State Updates for Silky Smooth Animation & Feedback
+    if (['COLD_GAS_THRUST', 'ORBITAL_BOOST', 'THRUST'].includes(cmdUpper)) {
       setActiveThrustAnimation(true);
-      setTimeout(() => setActiveThrustAnimation(false), 2500);
+      setTimeout(() => setActiveThrustAnimation(false), 3200);
+      setSimState((prev) => prev ? {
+        ...prev,
+        speed: parseFloat((prev.speed + 0.08).toFixed(3)),
+        altitude: parseFloat((prev.altitude + 3.8).toFixed(1)),
+        propellant: Math.max(0, parseFloat((prev.propellant - 2.4).toFixed(1))),
+        status: 'THRUSTER_BURN'
+      } : prev);
+    } else if (['DEPLOY_SOLAR_PANELS', 'DEPLOY_PANELS'].includes(cmdUpper)) {
+      setSimState((prev) => prev ? { ...prev, solarPanelsDeployed: true } : prev);
+    } else if (['STOW_SOLAR_PANELS', 'STOW_PANELS', 'RETRACT_SOLAR_PANELS'].includes(cmdUpper)) {
+      setSimState((prev) => prev ? { ...prev, solarPanelsDeployed: false } : prev);
+    } else if (['CYCLE_HEATERS', 'HEATERS_ON', 'TOGGLE_HEATERS', 'HEATERS'].includes(cmdUpper)) {
+      setSimState((prev) => {
+        if (!prev) return prev;
+        const newHeaterState = !prev.heaterActive;
+        return {
+          ...prev,
+          heaterActive: newHeaterState,
+          temperature: {
+            ...prev.temperature,
+            bus: parseFloat((prev.temperature.bus + (newHeaterState ? 5.8 : -4.1)).toFixed(1))
+          }
+        };
+      });
     }
 
     try {
@@ -128,6 +164,7 @@ export default function CubeSatSimulator() {
     battery: 89.2,
     propellant: 94.5,
     solarPanelsDeployed: true,
+    heaterActive: false,
     attitude: { roll: 0.5, pitch: -1.1, yaw: 14.2, spinRate: 0.03, mode: 'NADIR' },
     groundStation: 'Toulouse Center (GS-003)',
     signalStrength: -78,
@@ -168,9 +205,9 @@ export default function CubeSatSimulator() {
         );
       case 'THRUSTER_BURN':
         return (
-          <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono font-bold bg-[#FFB000]/20 text-[#FFB000] border border-[#FFB000]/50 animate-pulse">
-            <Flame size={12} className="mr-1.5" />
-            THRUSTER PULSE FIRING
+          <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono font-bold bg-[#FF6600]/25 text-[#FF8800] border border-[#FF6600]/60 animate-pulse">
+            <Flame size={12} className="mr-1.5 text-[#FF6600]" />
+            COLD-GAS THRUST FIRING
           </span>
         );
       default:
@@ -183,7 +220,7 @@ export default function CubeSatSimulator() {
   };
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-300">
+    <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-300">
       
       {/* --- 1. TOP HEADER & CUBESAT SWITCHER --- */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-gray-800 pb-5 gap-4">
@@ -193,13 +230,19 @@ export default function CubeSatSimulator() {
               CubeSat Flight Simulation & Command Center
             </h1>
             {getStatusBadge(sat.status)}
+            {sat.heaterActive && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-mono font-bold bg-[#FFD700]/20 text-[#FFD700] border border-[#FFD700]/60 shadow-[0_0_12px_rgba(255,215,0,0.3)] animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-[#FFD700] mr-2 shadow-[0_0_8px_#ffd700]" />
+                HEATER ACTIVE (YELLOW ON)
+              </span>
+            )}
           </div>
           <p className="text-gray-400 font-mono text-xs tracking-widest mt-1">
             REALTIME ON-ORBIT SUBSYSTEM TELEMETRY • TELECOMMAND UPLINK DECK
           </p>
         </div>
 
-        {/* CubeSat Selector & 3D Controls */}
+        {/* CubeSat Selector, 3D Controls & Sidebar Toggle */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center bg-[#0B1221] border border-gray-800 rounded p-1">
             <span className="text-xs font-mono text-gray-500 px-2 uppercase">TARGET:</span>
@@ -233,13 +276,28 @@ export default function CubeSatSimulator() {
             {autoRotate ? <Play size={14} className="text-[#00F0FF]" /> : <Pause size={14} />}
             <span>{autoRotate ? '3D Spin' : '3D Static'}</span>
           </button>
+
+          {/* Toggle Closable Sidebar Button */}
+          <button
+            id="toggle-command-sidebar-btn"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded text-xs font-mono font-bold transition-all border ${
+              sidebarOpen
+                ? 'bg-[#00F0FF]/15 border-[#00F0FF]/50 text-[#00F0FF]'
+                : 'bg-[#0B1221] border-gray-700 text-gray-300 hover:text-white hover:border-[#00F0FF]'
+            }`}
+            title={sidebarOpen ? "Collapse command deck into full-screen view" : "Open telecommands & stream sidebar"}
+          >
+            {sidebarOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} className="text-[#00FF66]" />}
+            <span>{sidebarOpen ? 'COLLAPSE SIDEBAR' : 'OPEN COMMAND SIDEBAR'}</span>
+          </button>
         </div>
       </div>
 
       {/* --- 2. REALTIME TELEMETRY METRIC CARDS (SPEED, TEMP, LOAD, BATTERY) --- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* Metric 1: Orbital Speed */}
+        {/* Metric 1: Orbital Speed (Highlighted) */}
         <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-4 relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
           <div className="flex items-center justify-between text-gray-400 mb-2">
             <span className="text-xs font-mono tracking-widest uppercase flex items-center">
@@ -254,6 +312,7 @@ export default function CubeSatSimulator() {
               {sat.speed}
             </span>
             <span className="text-xs font-mono text-gray-400">km/s</span>
+            <span className="text-[11px] font-mono text-gray-500 ml-2">({(sat.speed * 3600).toFixed(0)} km/h)</span>
           </div>
           <div className="mt-3 flex items-center justify-between text-[11px] font-mono text-gray-400 border-t border-gray-800/80 pt-2">
             <span>Altitude: <strong className="text-white">{sat.altitude} km</strong></span>
@@ -261,13 +320,17 @@ export default function CubeSatSimulator() {
           </div>
         </div>
 
-        {/* Metric 2: Multi-Zone Temperature */}
+        {/* Metric 2: Multi-Zone Temperature (Heater aware) */}
         <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-4 relative overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
           <div className="flex items-center justify-between text-gray-400 mb-2">
             <span className="text-xs font-mono tracking-widest uppercase flex items-center">
               <Thermometer size={15} className="mr-1.5 text-[#FFB000]" /> CORE TEMPERATURE
             </span>
-            <span className="text-[10px] font-mono text-gray-400">NOMINAL</span>
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+              sat.heaterActive ? 'text-[#FFD700] bg-[#FFD700]/10 font-bold' : 'text-gray-400'
+            }`}>
+              {sat.heaterActive ? 'HEATER ACTIVE' : 'NOMINAL'}
+            </span>
           </div>
           <div className="flex items-baseline space-x-2">
             <span className="text-3xl font-bold font-mono text-white tracking-tight">
@@ -312,7 +375,7 @@ export default function CubeSatSimulator() {
             <span className="text-xs font-mono tracking-widest uppercase flex items-center">
               <BatteryCharging size={15} className="mr-1.5 text-[#00F0FF]" /> BATTERY & POWER
             </span>
-            <span className="text-[10px] font-mono text-[#00FF66]">
+            <span className={`text-[10px] font-mono ${sat.solarPanelsDeployed ? 'text-[#00FF66]' : 'text-[#FFB000]'}`}>
               {sat.solarPanelsDeployed ? 'WINGS DEPLOYED' : 'WINGS STOWED'}
             </span>
           </div>
@@ -330,21 +393,23 @@ export default function CubeSatSimulator() {
 
       </div>
 
-      {/* --- 3. MAIN SIMULATION INTERFACE: 3D VIEWPORT & COMMAND DECK --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* --- 3. MAIN SIMULATION INTERFACE: EXPANDED 3D VIEWPORT & CLOSABLE SIDEBAR --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* LEFT/CENTER: 3D Viewport & Spacecraft Status (7 Cols) */}
-        <div className="lg:col-span-7 flex flex-col space-y-0">
+        {/* MAIN CUBESAT VIEWPORT AREA: Takes 12 cols when sidebar closed, 8 cols when open */}
+        <div className={`transition-all duration-300 flex flex-col ${
+          sidebarOpen ? 'lg:col-span-8' : 'lg:col-span-12'
+        }`}>
           
-          {/* 3D Viewport Header: Mode Switcher */}
-          <div className="flex flex-wrap items-center justify-between bg-[#0B1221] border border-gray-800 rounded-t-lg px-4 py-2 text-xs font-mono gap-2">
+          {/* 3D Viewport Header: Mode Switcher & Quick Controls */}
+          <div className="flex flex-wrap items-center justify-between bg-[#0B1221] border border-gray-800 rounded-t-lg px-4 py-2.5 text-xs font-mono gap-3">
             <div className="flex items-center space-x-2">
               <span className="text-gray-400 uppercase text-[10px] tracking-widest hidden sm:inline">VIEWPORT:</span>
               <div className="flex items-center bg-[#050810] border border-gray-800 rounded p-0.5">
                 <button
                   id="cubesat-viewmode-earth-btn"
                   onClick={() => setViewportMode('EARTH_ORBIT')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-mono transition-all ${
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-mono transition-all ${
                     viewportMode === 'EARTH_ORBIT'
                       ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
                       : 'text-gray-400 hover:text-white'
@@ -356,7 +421,7 @@ export default function CubeSatSimulator() {
                 <button
                   id="cubesat-viewmode-closeup-btn"
                   onClick={() => setViewportMode('CLOSEUP')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-mono transition-all ${
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-mono transition-all ${
                     viewportMode === 'CLOSEUP'
                       ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
                       : 'text-gray-400 hover:text-white'
@@ -368,14 +433,27 @@ export default function CubeSatSimulator() {
               </div>
             </div>
 
-            <div className="text-[11px] text-[#00FF66] font-mono flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-ping" />
-              <span>{viewportMode === 'EARTH_ORBIT' ? 'ACTIVE ORBIT AROUND EARTH' : 'CHASSIS SUBSYSTEM INSPECTOR'}</span>
+            <div className="flex items-center space-x-3">
+              <div className="text-[11px] text-[#00FF66] font-mono flex items-center space-x-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-ping" />
+                <span>{viewportMode === 'EARTH_ORBIT' ? 'ACTIVE ORBIT AROUND EARTH' : 'CHASSIS SUBSYSTEM INSPECTOR'}</span>
+              </div>
+
+              {/* In-viewport quick button to open sidebar if closed */}
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="flex items-center space-x-1.5 px-2.5 py-1 bg-[#00F0FF]/15 border border-[#00F0FF]/40 text-[#00F0FF] hover:bg-[#00F0FF]/25 rounded text-xs font-mono transition-colors"
+                >
+                  <SlidersHorizontal size={12} />
+                  <span>OPEN COMMAND DECK</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* 3D Model / Globe Simulation Container */}
-          <div className="bg-[#050810] border border-gray-800 border-t-0 rounded-b-lg h-[470px] relative overflow-hidden shadow-2xl mb-4">
+          {/* 3D Model / Globe Simulation Container: EXPANDED BIGGER AREA (h-[650px]) */}
+          <div className="bg-[#050810] border border-gray-800 border-t-0 rounded-b-lg h-[620px] sm:h-[660px] relative overflow-hidden shadow-2xl mb-4">
             {viewportMode === 'EARTH_ORBIT' ? (
               <CubeSatGlobeView
                 satellite={sat}
@@ -393,14 +471,22 @@ export default function CubeSatSimulator() {
                   formFactor={sat.formFactor}
                   solarPanelsDeployed={sat.solarPanelsDeployed}
                   isThrusting={activeThrustAnimation}
+                  heaterActive={Boolean(sat.heaterActive)}
+                  speed={sat.speed}
+                  altitude={sat.altitude}
                   status={sat.status}
                   attitude={sat.attitude}
                   autoRotate={autoRotate}
                 />
 
-                {/* In-Viewport Flight HUD Overlay Bar */}
-                <div className="absolute bottom-3 left-3 right-3 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-                  <div className="flex items-center space-x-4">
+                {/* In-Viewport Flight HUD Overlay Bar (with speed & attitude status) */}
+                <div className="absolute bottom-3 left-3 right-3 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono z-10 shadow-lg">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center space-x-1.5 text-[#00F0FF]">
+                      <Gauge size={14} />
+                      <span className="text-gray-400">SPEED:</span>
+                      <strong className="text-white text-sm">{sat.speed} km/s</strong>
+                    </div>
                     <div>
                       <span className="text-gray-500">ATTITUDE: </span>
                       <span className="text-white font-semibold">
@@ -410,6 +496,12 @@ export default function CubeSatSimulator() {
                     <div>
                       <span className="text-gray-500">POINTING: </span>
                       <span className="text-[#00F0FF] font-semibold">{sat.attitude?.mode}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">HEATER: </span>
+                      <span className={sat.heaterActive ? 'text-[#FFD700] font-bold' : 'text-gray-400'}>
+                        {sat.heaterActive ? 'ACTIVE (YELLOW LIGHT ON)' : 'OFF'}
+                      </span>
                     </div>
                   </div>
 
@@ -461,199 +553,270 @@ export default function CubeSatSimulator() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: TELECOMMAND DECK & INTERACTIVE CLI TERMINAL (5 Cols) */}
-        <div className="lg:col-span-5 flex flex-col space-y-4">
-          
-          {/* Telecommand Button Matrix */}
-          <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-4">
-            <h3 className="font-mono text-xs tracking-widest text-[#00F0FF] uppercase mb-3 flex items-center">
-              <Send size={13} className="mr-2" /> DISPATCH TELECOMMANDS
-            </h3>
-
-            <div className="space-y-3">
-              
-              {/* Power & Panels */}
-              <div>
-                <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
-                  1. POWER & SOLAR
+        {/* --- CLOSABLE SIDEBAR: DISPATCH TELECOMMANDS & CUBESAT TELECOMMAND UPLINK STREAM --- */}
+        {sidebarOpen ? (
+          <div className="lg:col-span-4 flex flex-col space-y-4 animate-in slide-in-from-right-4 duration-300">
+            
+            {/* Sidebar Header & Tab Filter */}
+            <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Send size={14} className="text-[#00F0FF]" />
+                <span className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+                  TELECOMMAND SIDEBAR
                 </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleSendCommand('DEPLOY_SOLAR_PANELS')}
-                    disabled={isExecuting}
-                    className="flex items-center justify-center space-x-1.5 bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] py-2 px-2.5 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-50"
-                  >
-                    <Zap size={13} />
-                    <span>DEPLOY PANELS</span>
-                  </button>
-                  <button
-                    onClick={() => handleSendCommand('STOW_SOLAR_PANELS')}
-                    disabled={isExecuting}
-                    className="flex items-center justify-center space-x-1.5 bg-gray-800/80 hover:bg-gray-800 border border-gray-700 text-gray-300 py-2 px-2.5 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-50"
-                  >
-                    <RotateCcw size={13} />
-                    <span>STOW PANELS</span>
-                  </button>
-                </div>
               </div>
 
-              {/* Propulsion & Orbit */}
-              <div>
-                <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
-                  2. PROPULSION & ORBIT DELTA-V
-                </span>
+              <div className="flex items-center space-x-1">
+                {/* Tabs: ALL, CMDS, STREAM */}
+                <div className="flex items-center bg-[#050810] border border-gray-800 rounded p-0.5 text-[10px] font-mono">
+                  {['ALL', 'CMDS', 'CLI'].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setSidebarTab(tab)}
+                      className={`px-2 py-0.5 rounded transition-colors ${
+                        sidebarTab === tab
+                          ? 'bg-[#00F0FF]/25 text-[#00F0FF] font-bold'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Close Button */}
                 <button
-                  onClick={() => handleSendCommand('COLD_GAS_THRUST')}
-                  disabled={isExecuting}
-                  className="w-full flex items-center justify-center space-x-2 bg-[#FFB000]/15 hover:bg-[#FFB000]/25 border border-[#FFB000]/40 text-[#FFB000] py-2 px-3 rounded text-xs font-mono font-bold tracking-wider transition-colors disabled:opacity-50 shadow-[0_0_15px_rgba(255,176,0,0.1)]"
+                  id="close-command-sidebar-x-btn"
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors ml-1"
+                  title="Close sidebar (take full width)"
                 >
-                  <Flame size={14} />
-                  <span>FIRE COLD-GAS THRUST (+0.08 km/s)</span>
+                  <ChevronRight size={16} />
                 </button>
               </div>
-
-              {/* Guidance & ADCS */}
-              <div>
-                <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
-                  3. ADCS & ATTITUDE
-                </span>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => handleSendCommand('ADCS_DETUMBLE')}
-                    disabled={isExecuting}
-                    className="flex items-center justify-center space-x-1 bg-[#00FF66]/15 hover:bg-[#00FF66]/25 border border-[#00FF66]/40 text-[#00FF66] py-2 px-1 rounded text-[11px] font-mono tracking-wider transition-colors disabled:opacity-50"
-                  >
-                    <Compass size={12} />
-                    <span>DETUMBLE</span>
-                  </button>
-                  <button
-                    onClick={() => handleSendCommand('POINT_NADIR')}
-                    disabled={isExecuting}
-                    className="flex items-center justify-center space-x-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700 text-gray-300 py-2 px-1 rounded text-[11px] font-mono tracking-wider transition-colors disabled:opacity-50"
-                  >
-                    <span>PT NADIR</span>
-                  </button>
-                  <button
-                    onClick={() => handleSendCommand('POINT_SUN')}
-                    disabled={isExecuting}
-                    className="flex items-center justify-center space-x-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700 text-gray-300 py-2 px-1 rounded text-[11px] font-mono tracking-wider transition-colors disabled:opacity-50"
-                  >
-                    <span>PT SUN</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Science & Comms */}
-              <div>
-                <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
-                  4. PAYLOAD & COMMUNICATIONS
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleSendCommand('EXECUTE_PAYLOAD_CAPTURE')}
-                    disabled={isExecuting}
-                    className="flex items-center justify-center space-x-1.5 bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] py-2 px-2 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-50"
-                  >
-                    <Camera size={13} />
-                    <span>CAPTURE DATA</span>
-                  </button>
-                  <button
-                    onClick={() => handleSendCommand('START_DATA_DOWNLINK')}
-                    disabled={isExecuting}
-                    className="flex items-center justify-center space-x-1.5 bg-[#00FF66]/15 hover:bg-[#00FF66]/25 border border-[#00FF66]/40 text-[#00FF66] py-2 px-2 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-50"
-                  >
-                    <DownloadCloud size={13} />
-                    <span>DOWNLINK</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Safe Mode & Thermal */}
-              <div>
-                <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
-                  5. EMERGENCY & THERMAL
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleSendCommand(sat.status === 'SAFE_MODE' ? 'RESUME_NORMAL_OPS' : 'ENTER_SAFE_MODE')}
-                    disabled={isExecuting}
-                    className={`flex items-center justify-center space-x-1.5 py-2 px-2 rounded text-xs font-mono font-bold tracking-wider transition-colors disabled:opacity-50 border ${
-                      sat.status === 'SAFE_MODE'
-                        ? 'bg-[#00FF66]/20 border-[#00FF66]/50 text-[#00FF66]'
-                        : 'bg-[#FF2A2A]/15 border-[#FF2A2A]/40 text-[#FF2A2A] hover:bg-[#FF2A2A]/25'
-                    }`}
-                  >
-                    {sat.status === 'SAFE_MODE' ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
-                    <span>{sat.status === 'SAFE_MODE' ? 'RESUME OPS' : 'SAFE MODE'}</span>
-                  </button>
-                  <button
-                    onClick={() => handleSendCommand('CYCLE_HEATERS')}
-                    disabled={isExecuting}
-                    className="flex items-center justify-center space-x-1.5 bg-gray-800/80 hover:bg-gray-800 border border-gray-700 text-gray-300 py-2 px-2 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-50"
-                  >
-                    <Thermometer size={13} />
-                    <span>HEATERS ON</span>
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Interactive Uplink Terminal & Command History Log */}
-          <div className="bg-[#050810] border border-gray-800 rounded-lg p-3 flex flex-col h-[280px]">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2 text-xs font-mono">
-              <span className="text-gray-400 flex items-center">
-                <Terminal size={14} className="mr-1.5 text-[#00F0FF]" /> CUBESAT TELECOMMAND UPLINK STREAM
-              </span>
-              <span className="text-[10px] text-[#00FF66] bg-[#00FF66]/10 px-1.5 py-0.2 rounded font-bold">
-                ONLINE (14.2ms)
-              </span>
             </div>
 
-            {/* Scrollable Command Stream */}
-            <div className="flex-1 overflow-y-auto font-mono text-[11px] space-y-2 pr-1 custom-scrollbar">
-              {(!sat.commandHistory || sat.commandHistory.length === 0) ? (
-                <div className="text-gray-600 text-center py-8">
-                  AWAITING TELECOMMAND DISPATCH...
-                </div>
-              ) : (
-                sat.commandHistory.map((item, idx) => (
-                  <div key={idx} className="bg-[#0A0F1F] border border-gray-800/80 rounded p-2 text-gray-300">
-                    <div className="flex items-center justify-between text-[10px] text-gray-500 mb-0.5">
-                      <span className="text-[#00F0FF] font-bold">SEQ#{item.seq} [{item.command}]</span>
-                      <span>{new Date(item.timestamp).toLocaleTimeString()} UTC</span>
+            {/* BOX 1: DISPATCH TELECOMMANDS */}
+            {(sidebarTab === 'ALL' || sidebarTab === 'CMDS') && (
+              <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-4 shadow-xl">
+                <h3 className="font-mono text-xs tracking-widest text-[#00F0FF] uppercase mb-3 flex items-center justify-between">
+                  <span className="flex items-center">
+                    <Send size={13} className="mr-2" /> DISPATCH TELECOMMANDS
+                  </span>
+                  <span className="text-[10px] text-gray-500">UPLINK READY</span>
+                </h3>
+
+                <div className="space-y-3.5">
+                  
+                  {/* 1. Power & Solar Panels (Animated Fold & Unfold) */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 uppercase tracking-widest mb-1.5">
+                      <span>1. SOLAR WING ARRAYS</span>
+                      <span className={sat.solarPanelsDeployed ? 'text-[#00FF66]' : 'text-[#FFB000]'}>
+                        {sat.solarPanelsDeployed ? 'DEPLOYED' : 'STOWED'}
+                      </span>
                     </div>
-                    <div className="text-gray-400 text-[10.5px] leading-relaxed">
-                      {item.response}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleSendCommand('DEPLOY_SOLAR_PANELS')}
+                        disabled={isExecuting || sat.solarPanelsDeployed}
+                        className={`flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded text-xs font-mono tracking-wider transition-all border ${
+                          sat.solarPanelsDeployed
+                            ? 'bg-[#00FF66]/10 border-[#00FF66]/30 text-[#00FF66] opacity-75'
+                            : 'bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border-[#00F0FF]/40 text-[#00F0FF]'
+                        }`}
+                        title="Unfold solar wings outward symmetrically"
+                      >
+                        <Zap size={13} />
+                        <span>DEPLOY PANELS</span>
+                      </button>
+                      <button
+                        onClick={() => handleSendCommand('STOW_SOLAR_PANELS')}
+                        disabled={isExecuting || !sat.solarPanelsDeployed}
+                        className={`flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded text-xs font-mono tracking-wider transition-all border ${
+                          !sat.solarPanelsDeployed
+                            ? 'bg-[#FFB000]/10 border-[#FFB000]/30 text-[#FFB000] opacity-75'
+                            : 'bg-gray-800/80 hover:bg-gray-800 border-gray-700 text-gray-300'
+                        }`}
+                        title="Fold solar wings flush against CubeSat chassis"
+                      >
+                        <RotateCcw size={13} />
+                        <span>STOW PANELS</span>
+                      </button>
                     </div>
                   </div>
-                ))
-              )}
-              <div ref={terminalEndRef} />
-            </div>
 
-            {/* Interactive CLI Input */}
-            <form onSubmit={handleCliSubmit} className="mt-2 pt-2 border-t border-gray-800 flex items-center space-x-2">
-              <span className="text-[#00F0FF] font-mono text-xs font-bold shrink-0">CMD&gt;</span>
-              <input
-                type="text"
-                value={cliInput}
-                onChange={(e) => setCliInput(e.target.value)}
-                placeholder="Type command (e.g. THRUST, DETUMBLE, PING)..."
-                className="flex-1 bg-[#0A0F1F] border border-gray-800 rounded px-2.5 py-1 text-xs font-mono text-white placeholder-gray-600 focus:outline-none focus:border-[#00F0FF]"
-              />
-              <button
-                type="submit"
-                disabled={isExecuting || !cliInput.trim()}
-                className="bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 border border-[#00F0FF]/50 text-[#00F0FF] px-3 py-1 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-40"
-              >
-                UPLINK
-              </button>
-            </form>
+                  {/* 2. Propulsion & Orbit (Cold-Gas Thruster with Orange Cloud) */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 uppercase tracking-widest mb-1.5">
+                      <span>2. PROPULSION DELTA-V</span>
+                      <span className="text-[#FF6600]">ORANGE EXHAUST CLOUD</span>
+                    </div>
+                    <button
+                      onClick={() => handleSendCommand('COLD_GAS_THRUST')}
+                      disabled={isExecuting}
+                      className="w-full flex items-center justify-center space-x-2 bg-[#FF6600]/20 hover:bg-[#FF6600]/30 border border-[#FF6600]/50 text-[#FF8800] py-2.5 px-3 rounded text-xs font-mono font-bold tracking-wider transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(255,102,0,0.15)] active:scale-[0.98]"
+                    >
+                      <Flame size={14} className="text-[#FF6600] animate-pulse" />
+                      <span>FIRE COLD-GAS THRUST (+0.08 km/s)</span>
+                    </button>
+                  </div>
+
+                  {/* 3. Emergency & Thermal (Yellow Light for Heater) */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 uppercase tracking-widest mb-1.5">
+                      <span>3. THERMAL & SAFETY</span>
+                      <span className={sat.heaterActive ? 'text-[#FFD700]' : 'text-gray-500'}>
+                        {sat.heaterActive ? 'HEATER: ON (YELLOW)' : 'HEATER: OFF'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleSendCommand('CYCLE_HEATERS')}
+                        disabled={isExecuting}
+                        className={`flex items-center justify-center space-x-1.5 py-2 px-2 rounded text-xs font-mono font-bold tracking-wider transition-all border ${
+                          sat.heaterActive
+                            ? 'bg-[#FFD700]/20 border-[#FFD700] text-[#FFD700] shadow-[0_0_15px_rgba(255,215,0,0.3)]'
+                            : 'bg-gray-800/80 hover:bg-gray-800 border-gray-700 text-gray-300'
+                        }`}
+                        title="Toggle thermal management heating loops with yellow indicator"
+                      >
+                        <Thermometer size={13} className={sat.heaterActive ? 'text-[#FFD700]' : ''} />
+                        <span>{sat.heaterActive ? 'HEATER: ON' : 'TOGGLE HEATER'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleSendCommand(sat.status === 'SAFE_MODE' ? 'RESUME_NORMAL_OPS' : 'ENTER_SAFE_MODE')}
+                        disabled={isExecuting}
+                        className={`flex items-center justify-center space-x-1.5 py-2 px-2 rounded text-xs font-mono font-bold tracking-wider transition-all border ${
+                          sat.status === 'SAFE_MODE'
+                            ? 'bg-[#00FF66]/20 border-[#00FF66]/50 text-[#00FF66]'
+                            : 'bg-[#FF2A2A]/15 border-[#FF2A2A]/40 text-[#FF2A2A] hover:bg-[#FF2A2A]/25'
+                        }`}
+                      >
+                        {sat.status === 'SAFE_MODE' ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
+                        <span>{sat.status === 'SAFE_MODE' ? 'RESUME OPS' : 'SAFE MODE'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4. Guidance & ADCS */}
+                  <div>
+                    <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
+                      4. ADCS ATTITUDE POINTING
+                    </span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        onClick={() => handleSendCommand('ADCS_DETUMBLE')}
+                        disabled={isExecuting}
+                        className="flex items-center justify-center space-x-1 bg-[#00FF66]/15 hover:bg-[#00FF66]/25 border border-[#00FF66]/40 text-[#00FF66] py-2 px-1 rounded text-[11px] font-mono tracking-wider transition-colors disabled:opacity-50"
+                      >
+                        <Compass size={12} />
+                        <span>DETUMBLE</span>
+                      </button>
+                      <button
+                        onClick={() => handleSendCommand('POINT_NADIR')}
+                        disabled={isExecuting}
+                        className="flex items-center justify-center space-x-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700 text-gray-300 py-2 px-1 rounded text-[11px] font-mono tracking-wider transition-colors disabled:opacity-50"
+                      >
+                        <span>PT NADIR</span>
+                      </button>
+                      <button
+                        onClick={() => handleSendCommand('POINT_SUN')}
+                        disabled={isExecuting}
+                        className="flex items-center justify-center space-x-1 bg-gray-800/80 hover:bg-gray-800 border border-gray-700 text-gray-300 py-2 px-1 rounded text-[11px] font-mono tracking-wider transition-colors disabled:opacity-50"
+                      >
+                        <span>PT SUN</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 5. Payload & Comms */}
+                  <div>
+                    <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
+                      5. SCIENCE PAYLOAD & RF
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleSendCommand('EXECUTE_PAYLOAD_CAPTURE')}
+                        disabled={isExecuting}
+                        className="flex items-center justify-center space-x-1.5 bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] py-2 px-2 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-50"
+                      >
+                        <Camera size={13} />
+                        <span>CAPTURE DATA</span>
+                      </button>
+                      <button
+                        onClick={() => handleSendCommand('START_DATA_DOWNLINK')}
+                        disabled={isExecuting}
+                        className="flex items-center justify-center space-x-1.5 bg-[#00FF66]/15 hover:bg-[#00FF66]/25 border border-[#00FF66]/40 text-[#00FF66] py-2 px-2 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-50"
+                      >
+                        <DownloadCloud size={13} />
+                        <span>DOWNLINK</span>
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
+            {/* BOX 2: CUBESAT TELECOMMAND UPLINK STREAM & INTERACTIVE CLI */}
+            {(sidebarTab === 'ALL' || sidebarTab === 'CLI') && (
+              <div className="bg-[#050810] border border-gray-800 rounded-lg p-3 flex flex-col h-[320px] shadow-xl">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2 text-xs font-mono">
+                  <span className="text-gray-400 flex items-center">
+                    <Terminal size={14} className="mr-1.5 text-[#00F0FF]" /> CUBESAT TELECOMMAND STREAM
+                  </span>
+                  <span className="text-[10px] text-[#00FF66] bg-[#00FF66]/10 px-1.5 py-0.2 rounded font-bold">
+                    ONLINE (14.2ms)
+                  </span>
+                </div>
+
+                {/* Scrollable Command Stream */}
+                <div className="flex-1 overflow-y-auto font-mono text-[11px] space-y-2 pr-1 custom-scrollbar">
+                  {(!sat.commandHistory || sat.commandHistory.length === 0) ? (
+                    <div className="text-gray-600 text-center py-8">
+                      AWAITING TELECOMMAND DISPATCH...
+                    </div>
+                  ) : (
+                    sat.commandHistory.map((item, idx) => (
+                      <div key={idx} className="bg-[#0A0F1F] border border-gray-800/80 rounded p-2 text-gray-300">
+                        <div className="flex items-center justify-between text-[10px] text-gray-500 mb-0.5">
+                          <span className="text-[#00F0FF] font-bold">SEQ#{item.seq} [{item.command}]</span>
+                          <span>{new Date(item.timestamp).toLocaleTimeString()} UTC</span>
+                        </div>
+                        <div className="text-gray-400 text-[10.5px] leading-relaxed">
+                          {item.response}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={terminalEndRef} />
+                </div>
+
+                {/* Interactive CLI Input */}
+                <form onSubmit={handleCliSubmit} className="mt-2 pt-2 border-t border-gray-800 flex items-center space-x-2">
+                  <span className="text-[#00F0FF] font-mono text-xs font-bold shrink-0">CMD&gt;</span>
+                  <input
+                    type="text"
+                    value={cliInput}
+                    onChange={(e) => setCliInput(e.target.value)}
+                    placeholder="Type THRUST, HEATERS, DETUMBLE, STOW..."
+                    className="flex-1 bg-[#0A0F1F] border border-gray-800 rounded px-2.5 py-1 text-xs font-mono text-white placeholder-gray-600 focus:outline-none focus:border-[#00F0FF]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isExecuting || !cliInput.trim()}
+                    className="bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 border border-[#00F0FF]/50 text-[#00F0FF] px-3 py-1 rounded text-xs font-mono tracking-wider transition-colors disabled:opacity-40"
+                  >
+                    UPLINK
+                  </button>
+                </form>
+              </div>
+            )}
+
           </div>
-
-        </div>
+        ) : null}
 
       </div>
 

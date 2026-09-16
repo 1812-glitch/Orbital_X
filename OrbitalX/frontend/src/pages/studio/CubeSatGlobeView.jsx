@@ -245,16 +245,24 @@ export default function CubeSatGlobeView({
       emissiveIntensity: 0.6
     });
 
-    // Left Wing
+    // Left Wing (Hinged at front-left, extends outward along -X when deployed, folds along side when stowed)
     const leftWing = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, 0.05), wingMat);
-    leftWing.position.set(-w / 2 - (d.solarPanelsDeployed ? wingW / 2 : 0.05), 0, 0);
-    if (!d.solarPanelsDeployed) leftWing.rotation.y = Math.PI / 2;
+    if (d.solarPanelsDeployed) {
+      leftWing.position.set(-w / 2 - wingW / 2, 0, 0);
+    } else {
+      leftWing.position.set(-w / 2 - 0.03, 0, -wingW / 2 + depth / 2);
+      leftWing.rotation.y = Math.PI / 2; // folded flush along side wall
+    }
     group.add(leftWing);
 
-    // Right Wing
+    // Right Wing (Hinged at front-right, extends outward along +X when deployed, folds along side when stowed)
     const rightWing = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, 0.05), wingMat);
-    rightWing.position.set(w / 2 + (d.solarPanelsDeployed ? wingW / 2 : 0.05), 0, 0);
-    if (!d.solarPanelsDeployed) rightWing.rotation.y = -Math.PI / 2;
+    if (d.solarPanelsDeployed) {
+      rightWing.position.set(w / 2 + wingW / 2, 0, 0);
+    } else {
+      rightWing.position.set(w / 2 + 0.03, 0, -wingW / 2 + depth / 2);
+      rightWing.rotation.y = -Math.PI / 2; // folded flush along side wall
+    }
     group.add(rightWing);
 
     // Gold Rail Edges
@@ -274,10 +282,10 @@ export default function CubeSatGlobeView({
     led.position.set(0, h / 2 + 0.12, 0);
     group.add(led);
 
-    // Glowing Cold-Gas Thruster Plume
+    // Glowing Cold-Gas Thruster Plume (Warm Orange Plume)
     if (d.isThrusting || d.status === 'THRUSTER_BURN') {
       const plumeGeo = new THREE.ConeGeometry(0.45, 1.8, 16);
-      const plumeMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.9 });
+      const plumeMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 });
       const plume = new THREE.Mesh(plumeGeo, plumeMat);
       plume.rotation.x = Math.PI;
       plume.position.set(0, -h / 2 - 0.9, 0);
