@@ -21,10 +21,14 @@ import {
   AlertTriangle,
   Layers,
   Activity,
-  HardDrive
+  HardDrive,
+  Globe2,
+  Box
 } from 'lucide-react';
 import CubeSatSimulationCanvas from './CubeSatSimulationCanvas';
+import CubeSatGlobeView from './CubeSatGlobeView';
 import cubesatSimService from '../../services/cubesatSimService';
+import { groundStationService } from '../../services/groundStationService';
 
 export default function CubeSatSimulator() {
   const [selectedSatId, setSelectedSatId] = useState('CUBESAT-ION');
@@ -34,7 +38,24 @@ export default function CubeSatSimulator() {
   const [cliInput, setCliInput] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const [activeThrustAnimation, setActiveThrustAnimation] = useState(false);
+  const [viewportMode, setViewportMode] = useState('EARTH_ORBIT'); // 'EARTH_ORBIT' | 'CLOSEUP'
+  const [groundStations, setGroundStations] = useState([]);
+  const [warpSpeed, setWarpSpeed] = useState(15);
+  const [liveCoords, setLiveCoords] = useState(null);
   const terminalEndRef = useRef(null);
+
+  // Load ground stations once on mount
+  useEffect(() => {
+    const fetchGroundStations = async () => {
+      try {
+        const res = await groundStationService.getAllGroundStations();
+        setGroundStations(res.data || []);
+      } catch (err) {
+        console.error('Failed to load ground stations in simulator', err);
+      }
+    };
+    fetchGroundStations();
+  }, []);
 
   // Initial fetch and polling every 4 seconds
   useEffect(() => {
@@ -313,42 +334,95 @@ export default function CubeSatSimulator() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* LEFT/CENTER: 3D Viewport & Spacecraft Status (7 Cols) */}
-        <div className="lg:col-span-7 flex flex-col space-y-4">
+        <div className="lg:col-span-7 flex flex-col space-y-0">
           
-          {/* 3D Model Simulation Container */}
-          <div className="bg-[#050810] border border-gray-800 rounded-lg h-[460px] relative overflow-hidden shadow-2xl">
-            <CubeSatSimulationCanvas 
-              formFactor={sat.formFactor}
-              solarPanelsDeployed={sat.solarPanelsDeployed}
-              isThrusting={activeThrustAnimation}
-              status={sat.status}
-              attitude={sat.attitude}
-              autoRotate={autoRotate}
-            />
-
-            {/* In-Viewport Flight HUD Overlay Bar */}
-            <div className="absolute bottom-3 left-3 right-3 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-              <div className="flex items-center space-x-4">
-                <div>
-                  <span className="text-gray-500">ATTITUDE: </span>
-                  <span className="text-white font-semibold">
-                    R:{sat.attitude?.roll}° P:{sat.attitude?.pitch}° Y:{sat.attitude?.yaw}°
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-500">POINTING: </span>
-                  <span className="text-[#00F0FF] font-semibold">{sat.attitude?.mode}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-ping" />
-                  <span className="text-gray-400">GS: </span>
-                  <span className="text-white">{sat.groundStation}</span>
-                </div>
+          {/* 3D Viewport Header: Mode Switcher */}
+          <div className="flex flex-wrap items-center justify-between bg-[#0B1221] border border-gray-800 rounded-t-lg px-4 py-2 text-xs font-mono gap-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-gray-400 uppercase text-[10px] tracking-widest hidden sm:inline">VIEWPORT:</span>
+              <div className="flex items-center bg-[#050810] border border-gray-800 rounded p-0.5">
+                <button
+                  id="cubesat-viewmode-earth-btn"
+                  onClick={() => setViewportMode('EARTH_ORBIT')}
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-mono transition-all ${
+                    viewportMode === 'EARTH_ORBIT'
+                      ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Globe2 size={13} />
+                  <span>3D EARTH ORBIT</span>
+                </button>
+                <button
+                  id="cubesat-viewmode-closeup-btn"
+                  onClick={() => setViewportMode('CLOSEUP')}
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-mono transition-all ${
+                    viewportMode === 'CLOSEUP'
+                      ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Box size={13} />
+                  <span>SPACECRAFT CLOSE-UP</span>
+                </button>
               </div>
             </div>
+
+            <div className="text-[11px] text-[#00FF66] font-mono flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-ping" />
+              <span>{viewportMode === 'EARTH_ORBIT' ? 'ACTIVE ORBIT AROUND EARTH' : 'CHASSIS SUBSYSTEM INSPECTOR'}</span>
+            </div>
+          </div>
+
+          {/* 3D Model / Globe Simulation Container */}
+          <div className="bg-[#050810] border border-gray-800 border-t-0 rounded-b-lg h-[470px] relative overflow-hidden shadow-2xl mb-4">
+            {viewportMode === 'EARTH_ORBIT' ? (
+              <CubeSatGlobeView
+                satellite={sat}
+                status={sat.status}
+                solarPanelsDeployed={sat.solarPanelsDeployed}
+                isThrusting={activeThrustAnimation}
+                groundStations={groundStations}
+                warpSpeed={warpSpeed}
+                setWarpSpeed={setWarpSpeed}
+                onTelemetryUpdate={(pos) => setLiveCoords(pos)}
+              />
+            ) : (
+              <>
+                <CubeSatSimulationCanvas 
+                  formFactor={sat.formFactor}
+                  solarPanelsDeployed={sat.solarPanelsDeployed}
+                  isThrusting={activeThrustAnimation}
+                  status={sat.status}
+                  attitude={sat.attitude}
+                  autoRotate={autoRotate}
+                />
+
+                {/* In-Viewport Flight HUD Overlay Bar */}
+                <div className="absolute bottom-3 left-3 right-3 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+                  <div className="flex items-center space-x-4">
+                    <div>
+                      <span className="text-gray-500">ATTITUDE: </span>
+                      <span className="text-white font-semibold">
+                        R:{sat.attitude?.roll}° P:{sat.attitude?.pitch}° Y:{sat.attitude?.yaw}°
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">POINTING: </span>
+                      <span className="text-[#00F0FF] font-semibold">{sat.attitude?.mode}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-ping" />
+                      <span className="text-gray-400">GS: </span>
+                      <span className="text-white">{sat.groundStation}</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Quick Subsystem Status Indicators */}
