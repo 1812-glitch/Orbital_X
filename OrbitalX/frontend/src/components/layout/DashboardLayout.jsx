@@ -21,7 +21,8 @@ import {
   RadioTower,
   CheckCheck,
   X,
-  ExternalLink
+  ExternalLink,
+  Cpu
 } from 'lucide-react';
 import api from '../../lib/apiClient';
 import { adminService } from '../../services/adminService';
@@ -151,6 +152,7 @@ export default function DashboardLayout() {
     { name: 'Satellites', path: '/satellites', icon: <Satellite size={18} /> },
     { name: 'Orbital Viewer', path: '/orbit', icon: <Globe2 size={18} /> },
     { name: '3D Studio', path: '/studio', icon: <Boxes size={18} /> },
+    { name: 'CubeSat Simulator', path: '/cubesat-sim', icon: <Cpu size={18} /> },
     { name: 'Telemetry', path: '/telemetry', icon: <Activity size={18} /> },
     { name: 'Mission Control', path: '/missions', icon: <TerminalSquare size={18} /> },
     { name: 'Communications', path: '/communications', icon: <Radio size={18} /> },

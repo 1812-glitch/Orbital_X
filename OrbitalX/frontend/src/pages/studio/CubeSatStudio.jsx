@@ -9,9 +9,11 @@ import {
   X,
   Settings,
   Wrench,
-  CheckCircle
+  CheckCircle,
+  Activity
 } from 'lucide-react';
 import CubeSatCanvas from './CubeSatCanvas';
+import CubeSatSimulator from './CubeSatSimulator';
 import { CUBESAT_COMPONENTS, COMPONENT_CATEGORIES, FORM_FACTORS } from './cubesatComponents';
 
 export default function CubeSatStudio() {
@@ -25,7 +27,7 @@ export default function CubeSatStudio() {
   const [mountedComponents, setMountedComponents] = useState({});
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState('3D'); // '3D' | 'LIST'
+  const [viewMode, setViewMode] = useState('3D'); // '3D' | 'LIST' | 'SIMULATE'
   
   // Animation & Diagnostics State
   const [autoRotate, setAutoRotate] = useState(false);
@@ -274,6 +276,32 @@ export default function CubeSatStudio() {
           )}
         </div>
 
+        {/* Center: Mode Switcher Tab */}
+        <div className="flex items-center bg-[#12192b] border border-gray-800 rounded p-0.5 font-mono text-xs font-bold">
+          <button
+            onClick={() => setViewMode('3D')}
+            className={`px-3 py-1 rounded transition-all ${
+              viewMode !== 'SIMULATE'
+                ? 'bg-[#00F0FF] text-[#0A0F1F] shadow-sm'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            CAD Assembly
+          </button>
+          <button
+            id="cubesat-studio-sim-tab-btn"
+            onClick={() => setViewMode('SIMULATE')}
+            className={`px-3.5 py-1 rounded transition-all flex items-center space-x-1.5 ${
+              viewMode === 'SIMULATE'
+                ? 'bg-[#00F0FF] text-[#0A0F1F] shadow-[0_0_12px_rgba(0,240,255,0.35)]'
+                : 'text-[#00F0FF] hover:bg-[#00F0FF]/15'
+            }`}
+          >
+            <Activity size={13} />
+            <span>LIVE SIMULATION & COMMAND</span>
+          </button>
+        </div>
+
         {/* Center & Right Controls */}
         <div className="flex items-center space-x-6">
           
@@ -340,8 +368,13 @@ export default function CubeSatStudio() {
 
       </header>
 
-      {/* 2. MAIN 3-COLUMN WORKSPACE */}
-      <div className="flex-1 flex min-h-0 overflow-hidden relative">
+      {/* 2. MAIN CONTENT: SIMULATION VIEW OR 3-COLUMN CAD WORKSPACE */}
+      {viewMode === 'SIMULATE' ? (
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-[#050810]">
+          <CubeSatSimulator />
+        </div>
+      ) : (
+        <div className="flex-1 flex min-h-0 overflow-hidden relative">
 
         {/* --- LEFT COLUMN: COMPONENT LIBRARY --- */}
         <aside className="w-80 bg-[#0A0F1F] border-r border-gray-800 flex flex-col shrink-0 z-20">
@@ -519,6 +552,12 @@ export default function CubeSatStudio() {
                   }`}
                 >
                   List
+                </button>
+                <button
+                  onClick={() => setViewMode('SIMULATE')}
+                  className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all text-[#00F0FF] hover:bg-[#00F0FF]/15"
+                >
+                  ⚡ Live Sim
                 </button>
               </div>
             </div>
@@ -812,6 +851,7 @@ export default function CubeSatStudio() {
         </aside>
 
       </div>
+      )}
 
       {/* Floating Notification Toast */}
       {notification && (

@@ -13,6 +13,7 @@ import DashboardLayout from './components/layout/DashboardLayout';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const OrbitalViewer = lazy(() => import('./pages/OrbitalViewer'));
 const CubeSatStudio = lazy(() => import('./pages/studio/CubeSatStudio'));
+const CubeSatSimulator = lazy(() => import('./pages/studio/CubeSatSimulator'));
 
 const SatelliteFleet = lazy(() => import('./pages/satellites/SatelliteFleet'));
 const SatelliteDetail = lazy(() => import('./pages/satellites/SatelliteDetail'));
@@ -55,6 +56,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/orbit" element={<OrbitalViewer />} />
               <Route path="/studio" element={<CubeSatStudio />} />
+              <Route path="/cubesat-sim" element={<CubeSatSimulator />} />
               
               {/* Phase 4: Satellites */}
               <Route path="/satellites" element={<SatelliteFleet />} />
