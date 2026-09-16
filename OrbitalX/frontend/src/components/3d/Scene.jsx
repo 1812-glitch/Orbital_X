@@ -1,21 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Globe from 'react-globe.gl';
-import { SAT_SLOT_COLORS } from './OrbitingSatellitesPanel';
-
-// Helper to calculate angular distance between two lat/lng coordinates in degrees
-const getAngularDistanceDeg = (lat1, lng1, lat2, lng2) => {
-  const rlat1 = (lat1 * Math.PI) / 180;
-  const rlng1 = (lng1 * Math.PI) / 180;
-  const rlat2 = (lat2 * Math.PI) / 180;
-  const rlng2 = (lng2 * Math.PI) / 180;
-  const cosDist = Math.sin(rlat1) * Math.sin(rlat2) + Math.cos(rlat1) * Math.cos(rlat2) * Math.cos(rlng1 - rlng2);
-  return (Math.acos(Math.max(-1, Math.min(1, cosDist))) * 180) / Math.PI;
-};
-
-// Deterministic hash seed for fixed orbital parameters per satellite
-const getSatSeed = (id) => {
-  return String(id).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-};
+import {
+  SAT_SLOT_COLORS,
+  getAngularDistanceDeg,
+  calculateVisualAltitude,
+  generateFixedOrbitalPath,
+  isCubeSatType,
+} from '../../utils/orbitalMath';
 
 export default function Scene({ 
   fleetData, 
@@ -64,24 +55,6 @@ export default function Scene({
     return '#00F0FF'; // Cyan
   };
 
-  // Compute visual 3D altitude directly and proportionately from real physical altitude (km)
-  const calculateVisualAltitude = (altitudeKm, orbitType = 'LEO') => {
-    let km = Number(altitudeKm);
-    if (!km || isNaN(km) || km < 100) {
-      if (orbitType === 'GEO') km = 35786;
-      else if (orbitType === 'MEO') km = 20200;
-      else km = 550;
-    }
-
-    // Proportional physical curve:
-    // LEO (400 - 1,000 km, e.g. CubeSats): ~0.065 to 0.085 (snug to Earth atmosphere)
-    // MEO (10,000 - 20,000 km, e.g. GPS / Beta-2): ~0.30 to 0.44 (medium orbital shell)
-    // GEO (~35,786 km, e.g. Weather / Gamma-3): ~0.65 (outer geostationary belt)
-    const clampedKm = Math.max(200, Math.min(42000, km));
-    const normalized = Math.pow(clampedKm / 36000, 0.72);
-    return parseFloat((0.045 + 0.60 * normalized).toFixed(4));
-  };
-
   // Format fleet data for Globe with altitude strictly mapped to real physical altitude
   const satellites = useMemo(() => {
     return fleetData
@@ -91,7 +64,7 @@ export default function Scene({
         const slotIdx = selectedSatIds.indexOf(satId);
         const isSelected = slotIdx !== -1;
         const slotColor = isSelected ? SAT_SLOT_COLORS[slotIdx] : null;
-        const isCubeSat = (d.satellite.type && d.satellite.type.includes('CUBE')) || satId.includes('CUBE');
+        const isCubeSat = isCubeSatType(d.satellite);
         
         // Accurate altitude scaling according to real physical telemetry
         const realAltitudeKm = d.telemetry.altitude || (d.satellite.orbitRadius ? d.satellite.orbitRadius - 6371 : null);
@@ -115,31 +88,6 @@ export default function Scene({
         };
       });
   }, [fleetData, selectedSatIds]);
-
-  // Stable, fixed 3D orbital trajectory path calculation that NEVER wiggles, jumps or changes
-  const generateFixedOrbitalPath = (sat, numPoints = 120) => {
-    const points = [];
-    const inclinationDeg = sat.inclination || 51.6;
-    const incRad = (inclinationDeg * Math.PI) / 180;
-    
-    // Deterministic fixed ascending node longitude per satellite ID
-    const seed = getSatSeed(sat.id);
-    const nodeLng = ((seed * 73) % 360) * (Math.PI / 180);
-    const alt = sat.alt;
-
-    for (let i = 0; i <= numPoints; i++) {
-      const u = (i / numPoints) * 2 * Math.PI;
-      // Fixed spherical coordinates in stable Keplerian orbital plane
-      const x = Math.cos(nodeLng) * Math.cos(u) - Math.sin(nodeLng) * Math.sin(u) * Math.cos(incRad);
-      const y = Math.sin(u) * Math.sin(incRad);
-      const z = Math.sin(nodeLng) * Math.cos(u) + Math.cos(nodeLng) * Math.sin(u) * Math.cos(incRad);
-
-      const latDeg = Math.asin(Math.max(-1, Math.min(1, y))) * (180 / Math.PI);
-      const lngDeg = Math.atan2(z, x) * (180 / Math.PI);
-      points.push([latDeg, lngDeg, alt]);
-    }
-    return points;
-  };
 
   // Memoize stable 3D Orbital Trajectory Paths for selected satellites (max 3)
   const selectedOrbitalPaths = useMemo(() => {

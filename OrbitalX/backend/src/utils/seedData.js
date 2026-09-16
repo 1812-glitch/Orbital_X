@@ -4,6 +4,7 @@ const Satellite = require('../models/Satellite');
 const GroundStation = require('../models/GroundStation');
 const Mission = require('../models/Mission');
 const AuditLog = require('../models/AuditLog');
+const Notification = require('../models/Notification');
 const bcrypt = require('bcrypt');
 
 const seedData = async () => {
@@ -110,6 +111,66 @@ const seedData = async () => {
       ];
       await AuditLog.insertMany(auditLogs);
       console.log('Audit logs seeded.');
+    }
+
+    // Seed notifications if collection is empty
+    const notifCount = await Notification.countDocuments();
+    if (notifCount === 0) {
+      const targetUser = (await User.findOne({ email: 'admin@orbitalx.com' })) || (await User.findOne());
+      if (targetUser) {
+        const seedNotifications = [
+          {
+            userId: targetUser._id,
+            type: 'ALERT',
+            title: 'SOLAR RADIATION STORM DETECTED',
+            message: 'Class M2.4 solar flare observed. Magnetosphere absorption index elevated for SAT-ALPHA-1.',
+            read: false,
+            createdAt: new Date(Date.now() - 10 * 60000)
+          },
+          {
+            userId: targetUser._id,
+            type: 'COMMS',
+            title: 'GROUND LINK ACQUIRED',
+            message: 'Toulouse Center (GS-003) established high-throughput X-Band downlink with CubeSat Ion-X.',
+            read: false,
+            createdAt: new Date(Date.now() - 35 * 60000)
+          },
+          {
+            userId: targetUser._id,
+            type: 'SYSTEM',
+            title: 'ORBITAL MANEUVER EXECUTED',
+            message: 'Beta Two station-keeping thruster burn completed successfully. Delta-V: +1.42 m/s.',
+            read: false,
+            createdAt: new Date(Date.now() - 75 * 60000)
+          },
+          {
+            userId: targetUser._id,
+            type: 'ALERT',
+            title: 'THERMAL THRESHOLD EXCEEDED',
+            message: 'SAT-BETA-2 battery bay temperature reached 41.2°C during direct solar exposure.',
+            read: true,
+            createdAt: new Date(Date.now() - 180 * 60000)
+          },
+          {
+            userId: targetUser._id,
+            type: 'COMMS',
+            title: 'TELEMETRY STREAM SYNCHRONIZED',
+            message: 'Canberra Complex (GS-004) telemetry lock confirmed at 99.8% packet reception.',
+            read: true,
+            createdAt: new Date(Date.now() - 360 * 60000)
+          },
+          {
+            userId: targetUser._id,
+            type: 'SYSTEM',
+            title: 'FIRMWARE INTEGRITY VERIFIED',
+            message: 'Autonomous ADCS guidance subsystem self-test passed with zero checksum faults.',
+            read: true,
+            createdAt: new Date(Date.now() - 720 * 60000)
+          }
+        ];
+        await Notification.insertMany(seedNotifications);
+        console.log('Seed notifications created successfully.');
+      }
     }
   } catch (err) {
     console.error('Error seeding data:', err);

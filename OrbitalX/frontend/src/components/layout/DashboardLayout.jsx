@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
@@ -18,16 +18,55 @@ import {
   FileBarChart,
   Boxes,
   Radio,
-  RadioTower
+  RadioTower,
+  CheckCheck,
+  X,
+  ExternalLink
 } from 'lucide-react';
 import api from '../../lib/apiClient';
 import { adminService } from '../../services/adminService';
+import notificationService from '../../services/notificationService';
 
 export default function DashboardLayout() {
   const { user } = useAuth();
   const location = useLocation();
   const [time, setTime] = useState(new Date().toISOString().substr(11, 8));
   const [sysStatus, setSysStatus] = useState({ api: true, sim: true });
+  
+  // Notification states
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [recentNotifs, setRecentNotifs] = useState([]);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [activeToast, setActiveToast] = useState(null);
+  const notifRef = useRef(null);
+  const lastCountRef = useRef(null);
+
+  const fetchNotificationData = async () => {
+    try {
+      const [countRes, listRes] = await Promise.all([
+        notificationService.getUnreadCount(),
+        notificationService.getAll({ limit: 6 })
+      ]);
+      const newCount = countRes.count || 0;
+      setUnreadCount(newCount);
+      const items = listRes.data || [];
+      setRecentNotifs(items);
+
+      // Trigger toast banner if count increased
+      if (lastCountRef.current !== null && newCount > lastCountRef.current && items.length > 0) {
+        const latest = items[0];
+        if (!latest.read) {
+          setActiveToast(latest);
+          setTimeout(() => {
+            setActiveToast(prev => (prev?._id === latest._id ? null : prev));
+          }, 6000);
+        }
+      }
+      lastCountRef.current = newCount;
+    } catch (err) {
+      // ignore network glitch on polling
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -46,11 +85,66 @@ export default function DashboardLayout() {
     checkStatus();
     const statusTimer = setInterval(checkStatus, 10000);
 
+    // Initial notification fetch and interval polling
+    fetchNotificationData();
+    const notifTimer = setInterval(fetchNotificationData, 8000);
+
     return () => {
       clearInterval(timer);
       clearInterval(statusTimer);
+      clearInterval(notifTimer);
     };
   }, []);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setIsNotifOpen(false);
+      }
+    };
+    if (isNotifOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isNotifOpen]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationService.markAsRead();
+      setUnreadCount(0);
+      setRecentNotifs(prev => prev.map(n => ({ ...n, read: true })));
+      lastCountRef.current = 0;
+    } catch (err) {
+      console.error('Failed to mark all as read', err);
+    }
+  };
+
+  const handleItemClick = async (notif) => {
+    if (!notif.read) {
+      try {
+        await notificationService.markAsRead([], notif._id);
+        setUnreadCount(prev => Math.max(0, prev - 1));
+        setRecentNotifs(prev => prev.map(n => n._id === notif._id ? { ...n, read: true } : n));
+        if (lastCountRef.current) lastCountRef.current = Math.max(0, lastCountRef.current - 1);
+      } catch (err) {
+        console.error('Failed to mark notification read', err);
+      }
+    }
+  };
+
+  const getNotifIcon = (type = '', title = '') => {
+    const t = (title + ' ' + type).toLowerCase();
+    if (t.includes('alert') || t.includes('storm') || t.includes('radiation') || t.includes('thermal') || t.includes('temp') || t.includes('hazard')) {
+      return <AlertTriangle size={15} className="text-[#FF2A2A]" />;
+    }
+    if (t.includes('comm') || t.includes('signal') || t.includes('link') || t.includes('ground') || t.includes('uplink') || t.includes('downlink')) {
+      return <Radio size={15} className="text-[#00F0FF]" />;
+    }
+    return <TerminalSquare size={15} className="text-[#00FF66]" />;
+  };
 
   const navItems = [
     { name: 'Overview', path: '/dashboard', icon: <LayoutDashboard size={18} /> },
@@ -188,15 +282,171 @@ export default function DashboardLayout() {
               SYSTEM TIME: {time} UTC
             </div>
             <div className="flex items-center space-x-4">
-              <button className="text-gray-400 hover:text-white transition-colors">
-                <Bell size={18} />
-              </button>
-              <button className="text-gray-400 hover:text-white transition-colors">
+              {/* Notification Bell with Dropdown */}
+              <div className="relative" ref={notifRef}>
+                <button 
+                  id="header-notification-bell"
+                  onClick={() => {
+                    setIsNotifOpen(!isNotifOpen);
+                    fetchNotificationData();
+                  }}
+                  className={`relative p-2 rounded transition-colors border ${
+                    isNotifOpen 
+                      ? 'bg-[#121C36] text-[#00F0FF] border-[#00F0FF]/40' 
+                      : 'text-gray-400 hover:text-white border-transparent hover:border-gray-800'
+                  }`}
+                  title="Notifications & Live Alerts"
+                  aria-label="Open notifications"
+                >
+                  <Bell size={18} />
+                  {unreadCount > 0 && (
+                    <span 
+                      id="header-unread-badge"
+                      className="absolute -top-1 -right-1 bg-[#FF2A2A] text-white text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ring-2 ring-[#0A0F1F] animate-pulse"
+                    >
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Dropdown Menu */}
+                {isNotifOpen && (
+                  <div 
+                    id="header-notification-dropdown"
+                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#0B1221] border border-gray-700/90 rounded-lg shadow-[0_15px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+                  >
+                    {/* Header */}
+                    <div className="px-4 py-3 bg-[#070C18] border-b border-gray-800 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-ping" />
+                        <span className="text-xs font-mono font-bold tracking-widest text-white uppercase">
+                          NOTIFICATIONS
+                        </span>
+                        {unreadCount > 0 && (
+                          <span className="bg-[#FF2A2A]/20 text-[#FF2A2A] border border-[#FF2A2A]/40 text-[10px] font-mono px-1.5 py-0.2 rounded font-bold">
+                            {unreadCount} NEW
+                          </span>
+                        )}
+                      </div>
+                      {unreadCount > 0 && (
+                        <button
+                          id="dropdown-mark-all-read-btn"
+                          onClick={handleMarkAllRead}
+                          className="text-[10px] font-mono tracking-wider text-[#00F0FF] hover:text-white hover:underline flex items-center space-x-1 transition-colors"
+                        >
+                          <CheckCheck size={12} />
+                          <span>MARK ALL READ</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Items List */}
+                    <div className="max-h-80 overflow-y-auto divide-y divide-gray-800/60">
+                      {recentNotifs.length === 0 ? (
+                        <div className="p-6 text-center text-xs font-mono text-gray-500">
+                          NO NOTIFICATIONS IN QUEUE
+                        </div>
+                      ) : (
+                        recentNotifs.map((notif) => (
+                          <div
+                            key={notif._id}
+                            onClick={() => handleItemClick(notif)}
+                            className={`p-3.5 flex items-start space-x-3 cursor-pointer transition-colors ${
+                              notif.read 
+                                ? 'bg-transparent hover:bg-[#121C36]/40 opacity-75' 
+                                : 'bg-[#121C36]/70 hover:bg-[#121C36] border-l-2 border-[#00F0FF]'
+                            }`}
+                          >
+                            <div className="p-2 bg-[#050810] border border-gray-800 rounded shrink-0 mt-0.5">
+                              {getNotifIcon(notif.type, notif.title)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs font-mono font-semibold truncate ${
+                                  notif.read ? 'text-gray-400' : 'text-white'
+                                }`}>
+                                  {notif.title}
+                                </span>
+                                {!notif.read && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#00F0FF] shrink-0 ml-2" />
+                                )}
+                              </div>
+                              <p className="text-[11px] text-gray-400 font-sans line-clamp-2 mt-0.5 leading-relaxed">
+                                {notif.message}
+                              </p>
+                              <span className="text-[9px] font-mono text-gray-500 tracking-wider mt-1 block">
+                                {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Footer Link to Notification Center */}
+                    <div className="p-2.5 bg-[#070C18] border-t border-gray-800 text-center">
+                      <NavLink
+                        to="/notifications"
+                        onClick={() => setIsNotifOpen(false)}
+                        className="inline-flex items-center space-x-1.5 text-xs font-mono tracking-widest text-[#00F0FF] hover:text-white transition-colors"
+                      >
+                        <span>VIEW NOTIFICATION CENTER</span>
+                        <ExternalLink size={12} />
+                      </NavLink>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button className="text-gray-400 hover:text-white transition-colors p-2">
                 <User size={18} />
               </button>
             </div>
           </div>
         </header>
+
+        {/* Realtime In-App Notification Toast */}
+        {activeToast && (
+          <div 
+            id="live-notification-toast"
+            className="fixed top-20 right-6 max-w-sm w-full bg-[#0B1221]/95 border border-[#00F0FF]/50 shadow-[0_0_25px_rgba(0,240,255,0.2)] rounded-lg p-4 z-50 backdrop-blur-md animate-in slide-in-from-top-4 duration-300"
+          >
+            <div className="flex items-start space-x-3">
+              <div className="p-2 bg-[#050810] border border-[#00F0FF]/30 rounded text-[#00F0FF] shrink-0">
+                {getNotifIcon(activeToast.type, activeToast.title)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-[#00F0FF] uppercase tracking-wider">
+                    {activeToast.type || 'SYSTEM ALERT'}
+                  </span>
+                  <button 
+                    onClick={() => setActiveToast(null)}
+                    className="text-gray-500 hover:text-white transition-colors ml-2"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <h4 className="text-xs font-mono font-semibold text-white mt-1 truncate">
+                  {activeToast.title}
+                </h4>
+                <p className="text-[11px] text-gray-300 font-sans mt-0.5 line-clamp-2">
+                  {activeToast.message}
+                </p>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-[9px] font-mono text-gray-500">JUST NOW</span>
+                  <NavLink
+                    to="/notifications"
+                    onClick={() => setActiveToast(null)}
+                    className="text-[10px] font-mono text-[#00F0FF] hover:underline"
+                  >
+                    OPEN CENTER →
+                  </NavLink>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Scrollable Content */}
         <main className="flex-1 overflow-y-auto p-6 lg:p-8 relative">
