@@ -24,15 +24,6 @@ const seedData = require('./src/utils/seedData');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB and seed if empty
-connectDB().then(async () => {
-  await seedData();
-  // Start Telemetry Simulator Background Task (every 10 seconds)
-  if (process.env.NODE_ENV !== 'test') {
-    startSimulation(10000);
-  }
-});
-
 // Middleware
 app.use(express.json());
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
@@ -66,6 +57,32 @@ app.use((req, res, next) => {
 // Global Error handler
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`[Server] OrbitalX backend started on port ${PORT}`);
-});
+// Start server after DB is connected and seeded
+async function startServer() {
+  try {
+    await connectDB();
+    await seedData();
+    
+    if (process.env.NODE_ENV !== 'test') {
+      startSimulation(10000);
+    }
+
+    const server = app.listen(PORT, () => {
+      console.log(`[Server] OrbitalX backend started on port ${PORT}`);
+    });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`[Server Error] Port ${PORT} is already in use. Please free up port ${PORT}.`);
+      } else {
+        console.error('[Server Error]', err);
+      }
+    });
+  } catch (err) {
+    console.error('[Server] Fatal startup error:', err);
+    process.exit(1);
+  }
+}
+
+startServer();
+

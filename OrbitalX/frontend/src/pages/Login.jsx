@@ -8,24 +8,45 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    setError('');
+    setIsLoading(true);
     try {
       await login(email, password);
-      navigate('/profile');
+      navigate('/cubesat-sim');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      setError(err.response?.data?.message || err.message || 'Login failed. Please verify backend is active.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleQuickDemo = () => {
+  const handleDirectDemoLogin = async () => {
+    setEmail('admin@orbitalx.com');
+    setPassword('admin123');
+    setError('');
+    setIsLoading(true);
+    try {
+      await login('admin@orbitalx.com', 'admin123');
+      navigate('/cubesat-sim');
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Demo login failed. Please verify backend is active.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFillDemoOnly = () => {
     setEmail('admin@orbitalx.com');
     setPassword('admin123');
     setError('');
   };
+
 
   return (
     <div className="min-h-screen bg-[#0A0F1F] flex flex-col justify-center items-center p-4 text-gray-200 font-sans">
@@ -50,15 +71,26 @@ export default function Login() {
             <span className="text-gray-400 block text-[10px] uppercase">DEMO CREDENTIALS:</span>
             <span className="text-white font-semibold">admin@orbitalx.com / admin123</span>
           </div>
-          <button
-            type="button"
-            onClick={handleQuickDemo}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 border border-[#00F0FF]/50 text-[#00F0FF] rounded text-[11px] font-mono font-bold transition-all"
-            title="Auto-fill default admin credentials"
-          >
-            <Zap size={12} />
-            <span>AUTO-FILL</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={handleFillDemoOnly}
+              className="flex items-center space-x-1 px-2.5 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 rounded text-[11px] font-mono font-bold transition-all"
+              title="Fill fields with demo credentials"
+            >
+              <span>FILL</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDirectDemoLogin}
+              disabled={isLoading}
+              className="flex items-center space-x-1 px-2.5 py-1 bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 border border-[#00F0FF]/50 text-[#00F0FF] rounded text-[11px] font-mono font-bold transition-all disabled:opacity-50"
+              title="1-Click Direct Demo Login"
+            >
+              <Zap size={12} />
+              <span>1-CLICK LOGIN</span>
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -136,10 +168,20 @@ export default function Login() {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full bg-[#00F0FF] hover:bg-white text-black font-mono font-bold py-3.5 px-4 rounded transition-all duration-200 uppercase tracking-widest text-xs flex items-center justify-center space-x-2 mt-3 shadow-[0_0_15px_rgba(0,240,255,0.3)] hover:shadow-[0_0_20px_rgba(255,255,255,0.4)]"
+            disabled={isLoading}
+            className="w-full bg-[#00F0FF] hover:bg-white text-black font-mono font-bold py-3.5 px-4 rounded transition-all duration-200 uppercase tracking-widest text-xs flex items-center justify-center space-x-2 mt-3 shadow-[0_0_15px_rgba(0,240,255,0.3)] hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] disabled:opacity-50 cursor-pointer"
           >
-            <span>INITIALIZE OPERATOR LINK</span>
-            <ArrowRight size={16} />
+            {isLoading ? (
+              <span className="flex items-center space-x-2">
+                <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+                <span>AUTHENTICATING OPERATOR...</span>
+              </span>
+            ) : (
+              <>
+                <span>INITIALIZE OPERATOR LINK</span>
+                <ArrowRight size={16} />
+              </>
+            )}
           </button>
         </form>
 
@@ -158,11 +200,12 @@ export default function Login() {
         {/* Alternate Login Button */}
         <button
           type="button"
-          onClick={handleQuickDemo}
-          className="w-full bg-transparent border border-gray-800 hover:border-gray-600 text-gray-300 font-mono py-2.5 rounded transition-colors text-xs flex items-center justify-center space-x-2.5 mb-6"
+          onClick={handleDirectDemoLogin}
+          disabled={isLoading}
+          className="w-full bg-[#00F0FF]/10 hover:bg-[#00F0FF]/20 border border-[#00F0FF]/40 text-[#00F0FF] font-mono py-2.5 rounded transition-all text-xs flex items-center justify-center space-x-2.5 mb-6 disabled:opacity-50"
         >
-          <Globe size={15} className="text-gray-400" />
-          <span>Quick Login as System Administrator</span>
+          <Globe size={15} className="text-[#00F0FF]" />
+          <span>Quick 1-Click Login as System Administrator</span>
         </button>
 
         {/* Footer Link */}
