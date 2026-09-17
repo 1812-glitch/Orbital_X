@@ -160,6 +160,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
   switch (cmdUpper) {
     case 'DEPLOY_SOLAR_PANELS':
     case 'DEPLOY_PANELS':
+    case 'DEPLOY':
       sat.solarPanelsDeployed = true;
       sat.temperature.solar = parseFloat((sat.temperature.solar + 3.2).toFixed(1));
       sat.battery = Math.min(100, parseFloat((sat.battery + 2.5).toFixed(1)));
@@ -168,6 +169,8 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
 
     case 'RETRACT_SOLAR_PANELS':
     case 'STOW_SOLAR_PANELS':
+    case 'STOW_PANELS':
+    case 'STOW':
       sat.solarPanelsDeployed = false;
       sat.load.busPower = parseFloat((sat.load.busPower * 0.85).toFixed(1));
       responseText = `Solar arrays stowed in protective configuration. Power input reduced.`;
@@ -176,6 +179,9 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
     case 'COLD_GAS_THRUST':
     case 'ORBITAL_BOOST':
     case 'THRUST':
+    case 'BURST':
+    case 'CLOUD_BURST':
+    case 'THRUSTER':
       const deltaV = params.deltaV || 0.08;
       sat.speed = parseFloat((sat.speed + deltaV).toFixed(3));
       sat.altitude = parseFloat((sat.altitude + 3.8).toFixed(1));
@@ -184,7 +190,14 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       sat.temperature.bus = parseFloat((sat.temperature.bus + 2.1).toFixed(1));
       sat.load.cpu = Math.min(100, sat.load.cpu + 18);
       sat.status = 'THRUSTER_BURN';
-      responseText = `Thruster impulse fired. Speed increased to ${sat.speed} km/s. Altitude boosted to ${sat.altitude} km. Propellant remaining: ${sat.propellant}%.`;
+      responseText = `Cold-gas thruster burst fired (+0.08 km/s). Speed boosted to ${sat.speed} km/s. Propellant: ${sat.propellant}%. Burst duration: 3s.`;
+      
+      // Auto-cutoff after 3s burst so the system returns to NOMINAL and can be used again!
+      setTimeout(() => {
+        if (sat && sat.status === 'THRUSTER_BURN') {
+          sat.status = 'NOMINAL';
+        }
+      }, 3000);
       break;
 
     case 'ADCS_DETUMBLE':
@@ -198,6 +211,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       break;
 
     case 'POINT_NADIR':
+    case 'NADIR':
       sat.attitude.mode = 'NADIR';
       sat.attitude.roll = 0.1;
       sat.attitude.pitch = 0.0;
@@ -206,6 +220,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       break;
 
     case 'POINT_SUN':
+    case 'SUN':
       sat.attitude.mode = 'SUN_TRACKING';
       sat.attitude.pitch = 18.4;
       sat.temperature.solar = parseFloat((sat.temperature.solar + 4.8).toFixed(1));
@@ -214,6 +229,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
 
     case 'EXECUTE_PAYLOAD_CAPTURE':
     case 'CAPTURE_IMAGE':
+    case 'CAPTURE':
     case 'SCIENCE_PASS':
       sat.status = 'SCIENCE_ACQUISITION';
       sat.load.cpu = Math.min(96, sat.load.cpu + 58); // Heavy CPU Load Spike
@@ -235,6 +251,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
 
     case 'ENTER_SAFE_MODE':
     case 'SAFE_MODE':
+    case 'SAFE':
       sat.status = 'SAFE_MODE';
       sat.load.cpu = 8;
       sat.load.memory = 15;
@@ -245,6 +262,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
 
     case 'RESUME_NORMAL_OPS':
     case 'NORMAL_OPS':
+    case 'RESUME':
       sat.status = 'NOMINAL';
       sat.load.cpu = 24;
       sat.load.busPower = 16.5;
@@ -255,6 +273,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
     case 'HEATERS_ON':
     case 'TOGGLE_HEATERS':
     case 'HEATERS':
+    case 'HEATER':
       sat.heaterActive = !sat.heaterActive;
       if (sat.heaterActive) {
         sat.temperature.bus = parseFloat((sat.temperature.bus + 5.8).toFixed(1));
@@ -270,6 +289,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       break;
 
     case 'HEATERS_OFF':
+    case 'HEATER_OFF':
       sat.heaterActive = false;
       sat.temperature.bus = parseFloat((sat.temperature.bus - 4.1).toFixed(1));
       sat.temperature.battery = parseFloat((sat.temperature.battery - 3.2).toFixed(1));

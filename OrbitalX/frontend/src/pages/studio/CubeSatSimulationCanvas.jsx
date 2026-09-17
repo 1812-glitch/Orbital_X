@@ -25,8 +25,10 @@ export default function CubeSatSimulationCanvas({
   const thrustLightRef = useRef(null);
   const gasCloudsRef = useRef([]);
   const statusLedRef = useRef(null);
-  const heaterLedRef = useRef(null);
+  const heaterBulbRef = useRef(null);
+  const heaterCoronaRef = useRef(null);
   const heaterLightRef = useRef(null);
+  const heaterStripsRef = useRef([]);
   const animIdRef = useRef(null);
 
   // Dynamic state refs for animation loop
@@ -46,7 +48,7 @@ export default function CubeSatSimulationCanvas({
   const is6U = formFactor === '6U';
   const heightMultiplier = is6U ? 3.0 : formFactor === '3U' ? 3.0 : 1.0;
   const chassisW = is6U ? 4.2 : 2.2;
-  const chassisH = 2.2 * heightMultiplier;
+  const chassisH = 2.2 * heightMultiplier; // 6.6 for 3U
   const chassisD = 2.2;
 
   useEffect(() => {
@@ -59,12 +61,12 @@ export default function CubeSatSimulationCanvas({
 
     // 2. Camera
     const camera = new THREE.PerspectiveCamera(
-      45,
+      42,
       container.clientWidth / container.clientHeight,
       0.1,
       100
     );
-    camera.position.set(7.5, 4.5, 8.5);
+    camera.position.set(7.2, 4.0, 9.2);
 
     // 3. Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -86,16 +88,16 @@ export default function CubeSatSimulationCanvas({
     controlsRef.current = controls;
 
     // 5. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.9);
     sunLight.position.set(12, 16, 12);
     sunLight.castShadow = true;
     scene.add(sunLight);
 
     // Earth Albedo bounce light (blueish from below)
-    const earthAlbedo = new THREE.DirectionalLight(0x00a8ff, 0.65);
+    const earthAlbedo = new THREE.DirectionalLight(0x00a8ff, 0.7);
     earthAlbedo.position.set(-6, -10, -4);
     scene.add(earthAlbedo);
 
@@ -178,10 +180,10 @@ export default function CubeSatSimulationCanvas({
     // Body Solar Cell Panels (front and back face)
     const cellMat = new THREE.MeshStandardMaterial({
       color: 0x051336,
-      roughness: 0.2,
-      metalness: 0.9,
+      roughness: 0.18,
+      metalness: 0.92,
       emissive: 0x001533,
-      emissiveIntensity: 0.3
+      emissiveIntensity: 0.4
     });
     const frontPanelGeo = new THREE.BoxGeometry(chassisW * 0.88, chassisH * 0.92, 0.03);
     const frontPanel = new THREE.Mesh(frontPanelGeo, cellMat);
@@ -205,67 +207,96 @@ export default function CubeSatSimulationCanvas({
     }
     satGroup.add(cellDivGroup);
 
-    // 8. Deployable Solar Wings (Left and Right)
-    // Realistic aerospace design: Hinges along the front-side edge rails.
-    // When DEPLOYED: wings extend outward along -X and +X, perfectly parallel and coplanar facing forward (+Z).
-    // When STOWED: wings fold flush against the side walls of the CubeSat bus (Y-Z plane).
-    const wingW = chassisD * 0.95; // perfectly fits the side face when stowed!
-    const wingH = chassisH * 0.90;
-    const wingD = 0.06;
+    // =========================================================================
+    // 8. DEPLOYABLE SOLAR WINGS (SYMMETRICAL, WIDE, PARALLEL WINGS)
+    // Left wing extends along -X, Right wing extends along +X.
+    // Both wings are coplanar, flat, parallel to each other facing forward (+Z).
+    // When STOWED: they fold flush against the sides of the chassis!
+    // When DEPLOYED: they unfold outward symmetrically like majestic solar arrays!
+    // =========================================================================
+    const wingW = 3.6; // Wide, magnificent solar array wings
+    const wingH = chassisH * 0.88;
+    const wingD = 0.05;
 
-    // LEFT WING HINGE ASSEMBLY
-    // Pivot at front-left edge: (-chassisW / 2, 0, chassisD / 2)
+    // LEFT WING ASSEMBLY
+    // Pivot at left edge of the bus: (-chassisW / 2, 0, 0)
     const leftPivot = new THREE.Group();
-    leftPivot.position.set(-chassisW / 2, 0, chassisD / 2);
+    leftPivot.position.set(-chassisW / 2, 0, 0);
     satGroup.add(leftPivot);
     leftPivotRef.current = leftPivot;
 
-    // Left Wing Mesh: when deployed (rotation.y = 0), extends leftwards (-X)
-    const leftWingGeo = new THREE.BoxGeometry(wingW, wingH, wingD);
-    const leftWing = new THREE.Mesh(leftWingGeo, cellMat);
-    leftWing.position.set(-wingW / 2, 0, -wingD / 2);
-    leftPivot.add(leftWing);
+    // Left Wing Group: centered at (-wingW / 2, 0, 0) relative to pivot
+    const leftWingGroup = new THREE.Group();
+    leftPivot.add(leftWingGroup);
 
-    const leftFrameGeo = new THREE.BoxGeometry(wingW + 0.04, wingH + 0.04, 0.04);
-    const leftFrame = new THREE.Mesh(leftFrameGeo, railMat);
-    leftFrame.position.set(-wingW / 2, 0, -wingD / 2 - 0.01);
-    leftPivot.add(leftFrame);
+    // Wing Sub-panels (3 segments per wing with gold dividers)
+    const leftWingBase = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, wingD), cellMat);
+    leftWingBase.position.set(-wingW / 2, 0, 0);
+    leftWingGroup.add(leftWingBase);
 
-    // Left hinge cylinder
-    const hingeGeo = new THREE.CylinderGeometry(0.06, 0.06, wingH, 16);
-    const leftHingePin = new THREE.Mesh(hingeGeo, railMat);
-    leftHingePin.position.set(0, 0, 0);
-    leftPivot.add(leftHingePin);
+    // Left Gold Frame Border
+    const wingFrameMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
+    const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(wingW + 0.04, wingH + 0.04, wingD + 0.01), wingFrameMat);
+    leftFrame.position.set(-wingW / 2, 0, -0.005);
+    leftWingGroup.add(leftFrame);
 
-    // RIGHT WING HINGE ASSEMBLY
-    // Pivot at front-right edge: (chassisW / 2, 0, chassisD / 2)
+    // Left Wing Segment Dividers (creating realistic solar cell segments)
+    for (let s = 1; s <= 2; s++) {
+      const segX = -(s * wingW) / 3;
+      const segRib = new THREE.Mesh(new THREE.BoxGeometry(0.04, wingH, wingD + 0.02), wingFrameMat);
+      segRib.position.set(segX, 0, 0);
+      leftWingGroup.add(segRib);
+    }
+
+    // Left Hinge Cylinders
+    const hingeMat = new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 0.9, roughness: 0.2 });
+    [-wingH * 0.35, 0, wingH * 0.35].forEach((hy) => {
+      const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 16), hingeMat);
+      hinge.position.set(0, hy, 0);
+      leftPivot.add(hinge);
+    });
+
+    // RIGHT WING ASSEMBLY
+    // Pivot at right edge of the bus: (+chassisW / 2, 0, 0)
     const rightPivot = new THREE.Group();
-    rightPivot.position.set(chassisW / 2, 0, chassisD / 2);
+    rightPivot.position.set(chassisW / 2, 0, 0);
     satGroup.add(rightPivot);
     rightPivotRef.current = rightPivot;
 
-    // Right Wing Mesh: when deployed (rotation.y = 0), extends rightwards (+X)
-    const rightWingGeo = new THREE.BoxGeometry(wingW, wingH, wingD);
-    const rightWing = new THREE.Mesh(rightWingGeo, cellMat);
-    rightWing.position.set(wingW / 2, 0, -wingD / 2);
-    rightPivot.add(rightWing);
+    const rightWingGroup = new THREE.Group();
+    rightPivot.add(rightWingGroup);
 
-    const rightFrame = new THREE.Mesh(leftFrameGeo, railMat);
-    rightFrame.position.set(wingW / 2, 0, -wingD / 2 - 0.01);
-    rightPivot.add(rightFrame);
+    const rightWingBase = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, wingD), cellMat);
+    rightWingBase.position.set(wingW / 2, 0, 0);
+    rightWingGroup.add(rightWingBase);
 
-    const rightHingePin = new THREE.Mesh(hingeGeo, railMat);
-    rightHingePin.position.set(0, 0, 0);
-    rightPivot.add(rightHingePin);
+    const rightFrame = new THREE.Mesh(new THREE.BoxGeometry(wingW + 0.04, wingH + 0.04, wingD + 0.01), wingFrameMat);
+    rightFrame.position.set(wingW / 2, 0, -0.005);
+    rightWingGroup.add(rightFrame);
 
-    // Initial wing rotation:
-    // Deployed: rotation.y = 0 (both extend outward along X, coplanar and parallel!)
-    // Stowed: Left pivot rotates +90° (+Math.PI / 2) -> folds flush backward against left side (-X wall)!
-    //         Right pivot rotates -90° (-Math.PI / 2) -> folds flush backward against right side (+X wall)!
-    const initLeftAngle = solarPanelsDeployed ? 0 : Math.PI / 2;
-    const initRightAngle = solarPanelsDeployed ? 0 : -Math.PI / 2;
-    leftPivot.rotation.y = initLeftAngle;
-    rightPivot.rotation.y = initRightAngle;
+    // Right Wing Segment Dividers
+    for (let s = 1; s <= 2; s++) {
+      const segX = (s * wingW) / 3;
+      const segRib = new THREE.Mesh(new THREE.BoxGeometry(0.04, wingH, wingD + 0.02), wingFrameMat);
+      segRib.position.set(segX, 0, 0);
+      rightWingGroup.add(segRib);
+    }
+
+    // Right Hinge Cylinders
+    [-wingH * 0.35, 0, wingH * 0.35].forEach((hy) => {
+      const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 16), hingeMat);
+      hinge.position.set(0, hy, 0);
+      rightPivot.add(hinge);
+    });
+
+    // Initial Wing Angles:
+    // When DEPLOYED: rotation.y = 0 -> Left wing points -X, Right wing points +X. Parallel and coplanar!
+    // When STOWED: Left pivot rotates +90° (+Math.PI / 2) -> folds flat along left side!
+    //              Right pivot rotates -90° (-Math.PI / 2) -> folds flat along right side!
+    const initLeft = solarPanelsDeployed ? 0 : Math.PI / 2;
+    const initRight = solarPanelsDeployed ? 0 : -Math.PI / 2;
+    leftPivot.rotation.y = initLeft;
+    rightPivot.rotation.y = initRight;
 
     // 9. Payload Aperture Lens (Top Face)
     const lensRingGeo = new THREE.CylinderGeometry(0.55, 0.6, 0.2, 32);
@@ -286,7 +317,11 @@ export default function CubeSatSimulationCanvas({
     lensGlass.position.set(0, chassisH / 2 + 0.12, 0);
     satGroup.add(lensGlass);
 
-    // 10. COLD-GAS THRUSTER NOZZLE & ANIMATED ORANGE CLOUD THING
+    // =========================================================================
+    // 10. COLD-GAS THRUSTER: ANIMATED ORANGE CLOUD BURST
+    // Shoots an expanding, billowing orange cloud of gas puffs downwards
+    // that expands in vacuum and dissipates after the burst ends!
+    // =========================================================================
     const nozzleGroup = new THREE.Group();
     nozzleGroup.position.set(0, -chassisH / 2, 0);
     satGroup.add(nozzleGroup);
@@ -313,7 +348,7 @@ export default function CubeSatSimulationCanvas({
     innerCore.position.set(0, -0.9, 0);
     plumeGroup.add(innerCore);
 
-    const outerPlumeGeo = new THREE.ConeGeometry(0.45, 1.8, 16);
+    const outerPlumeGeo = new THREE.ConeGeometry(0.48, 1.9, 16);
     const outerPlumeMat = new THREE.MeshBasicMaterial({
       color: 0xff5500, // Warm deep orange
       transparent: true,
@@ -324,38 +359,36 @@ export default function CubeSatSimulationCanvas({
     outerPlume.position.set(0, -1.2, 0);
     plumeGroup.add(outerPlume);
 
-    // Little Orange Gas Cloud Puffs (spherical billow clusters)
-    const cloudCount = 8;
+    // Billowing Orange Gas Cloud Puffs (10 expanding cloud billow spheres)
+    const cloudCount = 10;
     const gasClouds = [];
     for (let i = 0; i < cloudCount; i++) {
-      const puffGeo = new THREE.SphereGeometry(0.22 + Math.random() * 0.18, 12, 12);
+      const puffGeo = new THREE.SphereGeometry(0.26 + Math.random() * 0.2, 14, 14);
       const puffMat = new THREE.MeshStandardMaterial({
-        color: 0xff7711,
-        emissive: 0xff5500,
-        emissiveIntensity: 0.8,
+        color: 0xff6600,
+        emissive: 0xff4400,
+        emissiveIntensity: 0.9,
         transparent: true,
         opacity: 0,
-        roughness: 0.9
+        roughness: 0.8
       });
       const puff = new THREE.Mesh(puffGeo, puffMat);
-      // random initial offsets
       puff.userData = {
-        baseY: -0.6 - i * 0.3,
-        speed: 0.04 + Math.random() * 0.03,
-        driftX: (Math.random() - 0.5) * 0.03,
-        driftZ: (Math.random() - 0.5) * 0.03,
-        scaleSpeed: 0.035,
-        maxScale: 2.2 + Math.random() * 0.8,
-        life: i / cloudCount // staggered phase
+        baseY: -0.6 - i * 0.25,
+        speed: 0.045 + Math.random() * 0.035,
+        driftX: (Math.random() - 0.5) * 0.04,
+        driftZ: (Math.random() - 0.5) * 0.04,
+        maxScale: 2.6 + Math.random() * 1.0,
+        life: i / cloudCount
       };
       nozzleGroup.add(puff);
       gasClouds.push(puff);
     }
     gasCloudsRef.current = gasClouds;
 
-    // Orange Thruster Point Light
-    const thrustLight = new THREE.PointLight(0xff6600, 0, 8);
-    thrustLight.position.set(0, -0.8, 0);
+    // Orange Thruster Radiance Point Light
+    const thrustLight = new THREE.PointLight(0xff6600, 0, 10);
+    thrustLight.position.set(0, -0.9, 0);
     nozzleGroup.add(thrustLight);
     thrustLightRef.current = thrustLight;
 
@@ -373,7 +406,7 @@ export default function CubeSatSimulationCanvas({
     patch.position.set(0.6, chassisH / 2 + 0.03, 0.6);
     satGroup.add(patch);
 
-    // 12. STATUS BEACON LED (Top-Right)
+    // 12. STATUS BEACON LED (Green/Cyan/Red at top-right)
     const ledGeo = new THREE.SphereGeometry(0.08, 16, 16);
     const ledMat = new THREE.MeshBasicMaterial({ color: 0x00ff66 });
     const statusLed = new THREE.Mesh(ledGeo, ledMat);
@@ -381,71 +414,115 @@ export default function CubeSatSimulationCanvas({
     satGroup.add(statusLed);
     statusLedRef.current = statusLed;
 
-    // 13. YELLOW LIGHT FOR HEATER INDICATION (Requested by User)
-    // Mounted prominently on the front-top chassis with a glowing yellow diode + point light
-    const heaterHousingGeo = new THREE.CylinderGeometry(0.12, 0.14, 0.08, 16);
-    const heaterHousingMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.9 });
-    const heaterHousing = new THREE.Mesh(heaterHousingGeo, heaterHousingMat);
-    heaterHousing.rotation.x = Math.PI / 2;
-    heaterHousing.position.set(0, chassisH * 0.35, chassisD / 2 + 0.04);
-    satGroup.add(heaterHousing);
+    // =========================================================================
+    // 13. PROMINENT YELLOW LIGHT FOR HEATER INDICATION (Requested by User)
+    // A large, glowing yellow beacon lamp with an animated glowing corona halo
+    // and bright point light that bathes the CubeSat in warm yellow light!
+    // =========================================================================
+    const heaterGroup = new THREE.Group();
+    heaterGroup.position.set(0, chassisH * 0.35, chassisD / 2 + 0.05);
+    satGroup.add(heaterGroup);
 
-    const heaterLedGeo = new THREE.SphereGeometry(0.09, 16, 16);
-    const heaterLedMat = new THREE.MeshBasicMaterial({ color: 0x332b00 }); // off by default
-    const heaterLed = new THREE.Mesh(heaterLedGeo, heaterLedMat);
-    heaterLed.position.set(0, chassisH * 0.35, chassisD / 2 + 0.08);
-    satGroup.add(heaterLed);
-    heaterLedRef.current = heaterLed;
+    // Heavy thermal housing ring
+    const heaterRingGeo = new THREE.CylinderGeometry(0.32, 0.36, 0.14, 24);
+    const heaterRingMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
+    const heaterRing = new THREE.Mesh(heaterRingGeo, heaterRingMat);
+    heaterRing.rotation.x = Math.PI / 2;
+    heaterGroup.add(heaterRing);
 
-    // Glowing warm yellow indicator light
-    const heaterLight = new THREE.PointLight(0xffd700, 0, 5);
-    heaterLight.position.set(0, chassisH * 0.35, chassisD / 2 + 0.2);
-    satGroup.add(heaterLight);
+    // Large glowing yellow bulb lens
+    const heaterBulbGeo = new THREE.SphereGeometry(0.24, 24, 24);
+    const heaterBulbMat = new THREE.MeshStandardMaterial({
+      color: 0x332800,
+      emissive: 0x221a00,
+      emissiveIntensity: 0.2,
+      roughness: 0.2,
+      metalness: 0.8
+    });
+    const heaterBulb = new THREE.Mesh(heaterBulbGeo, heaterBulbMat);
+    heaterBulb.position.set(0, 0, 0.08);
+    heaterGroup.add(heaterBulb);
+    heaterBulbRef.current = heaterBulb;
+
+    // Glowing yellow aura corona halo
+    const coronaGeo = new THREE.SphereGeometry(0.44, 20, 20);
+    const coronaMat = new THREE.MeshBasicMaterial({
+      color: 0xffea00,
+      transparent: true,
+      opacity: 0,
+      wireframe: false
+    });
+    const heaterCorona = new THREE.Mesh(coronaGeo, coronaMat);
+    heaterCorona.position.set(0, 0, 0.08);
+    heaterGroup.add(heaterCorona);
+    heaterCoronaRef.current = heaterCorona;
+
+    // Bright yellow thermal PointLight
+    const heaterLight = new THREE.PointLight(0xffea00, 0, 12);
+    heaterLight.position.set(0, 0, 0.35);
+    heaterGroup.add(heaterLight);
     heaterLightRef.current = heaterLight;
 
-    // 14. Animation Loop
+    // Thermal heating element strips along the side rails (glow yellow when active)
+    const strips = [];
+    [-chassisW / 2 + 0.02, chassisW / 2 - 0.02].forEach((sx) => {
+      const stripGeo = new THREE.BoxGeometry(0.04, chassisH * 0.7, 0.03);
+      const stripMat = new THREE.MeshStandardMaterial({
+        color: 0x443300,
+        emissive: 0x000000,
+        metalness: 0.8
+      });
+      const strip = new THREE.Mesh(stripGeo, stripMat);
+      strip.position.set(sx, 0, chassisD / 2 + 0.02);
+      satGroup.add(strip);
+      strips.push(strip);
+    });
+    heaterStripsRef.current = strips;
+
+    // =========================================================================
+    // 14. ANIMATION LOOP
+    // =========================================================================
     let clock = new THREE.Clock();
     const animate = () => {
       animIdRef.current = requestAnimationFrame(animate);
       const elapsed = clock.getElapsedTime();
 
-      // Controls update
       controls.update();
 
-      // 1. Smooth Solar Wings Fold / Unfold Animation (Parallel & Coplanar when deployed!)
+      // 1. Smooth Solar Wings Fold / Unfold Animation (Lerp to Target)
       if (leftPivotRef.current && rightPivotRef.current) {
-        // Target: 0 rad (fully deployed outward along X) vs 90° (folded flush backward along bus side walls)
+        // Target: 0 rad (fully extended outward horizontally) vs Math.PI/2 (folded flat along bus side walls)
         const targetLeft = solarPanelsDeployedRef.current ? 0 : Math.PI / 2;
         const targetRight = solarPanelsDeployedRef.current ? 0 : -Math.PI / 2;
 
         leftPivotRef.current.rotation.y = THREE.MathUtils.lerp(
           leftPivotRef.current.rotation.y,
           targetLeft,
-          0.04
+          0.05
         );
         rightPivotRef.current.rotation.y = THREE.MathUtils.lerp(
           rightPivotRef.current.rotation.y,
           targetRight,
-          0.04
+          0.05
         );
       }
 
-      // 2. Animated Orange Gas Cloud Thing from Thrusters
+      // 2. Animated Orange Cloud Thruster Burst
       const isFiring = isThrustingRef.current || statusRef.current === 'THRUSTER_BURN';
       if (plumeGroupRef.current) {
         const core1 = plumeGroupRef.current.children[0];
         const core2 = plumeGroupRef.current.children[1];
 
         if (isFiring) {
-          const plumePulse = 0.8 + Math.sin(elapsed * 35) * 0.2;
+          const plumePulse = 0.85 + Math.sin(elapsed * 35) * 0.15;
           if (core1) core1.material.opacity = plumePulse;
-          if (core2) core2.material.opacity = plumePulse * 0.85;
+          if (core2) core2.material.opacity = plumePulse * 0.9;
 
           if (thrustLightRef.current) {
-            thrustLightRef.current.intensity = 2.4 + Math.sin(elapsed * 40) * 0.8;
+            thrustLightRef.current.intensity = 3.5 + Math.sin(elapsed * 40) * 1.0;
           }
 
-          // Animate expanding orange cloud billow puffs
+          // Animate expanding billowing orange clouds
           gasCloudsRef.current.forEach((puff) => {
             puff.userData.life += puff.userData.speed;
             if (puff.userData.life > 1.0) {
@@ -454,21 +531,21 @@ export default function CubeSatSimulationCanvas({
               puff.scale.set(1, 1, 1);
             }
             const t = puff.userData.life;
-            puff.position.y = -0.6 - t * 2.2;
+            puff.position.y = -0.6 - t * 2.5;
             puff.position.x += puff.userData.driftX;
             puff.position.z += puff.userData.driftZ;
 
             const curScale = 1 + t * puff.userData.maxScale;
-            puff.scale.set(curScale, curScale * 1.2, curScale);
+            puff.scale.set(curScale, curScale * 1.3, curScale);
 
-            // Billowing fade curve: quick rise, smooth fade out
-            puff.material.opacity = Math.sin(t * Math.PI) * 0.75;
+            // Billowing curve: rapid rise, smooth fade out in vacuum
+            puff.material.opacity = Math.sin(t * Math.PI) * 0.85;
           });
         } else {
-          if (core1) core1.material.opacity = THREE.MathUtils.lerp(core1.material.opacity, 0, 0.12);
-          if (core2) core2.material.opacity = THREE.MathUtils.lerp(core2.material.opacity, 0, 0.12);
+          if (core1) core1.material.opacity = THREE.MathUtils.lerp(core1.material.opacity, 0, 0.15);
+          if (core2) core2.material.opacity = THREE.MathUtils.lerp(core2.material.opacity, 0, 0.15);
           if (thrustLightRef.current) {
-            thrustLightRef.current.intensity = THREE.MathUtils.lerp(thrustLightRef.current.intensity, 0, 0.12);
+            thrustLightRef.current.intensity = THREE.MathUtils.lerp(thrustLightRef.current.intensity, 0, 0.15);
           }
           gasCloudsRef.current.forEach((puff) => {
             puff.material.opacity = THREE.MathUtils.lerp(puff.material.opacity, 0, 0.15);
@@ -476,20 +553,38 @@ export default function CubeSatSimulationCanvas({
         }
       }
 
-      // 3. Yellow Light for Heater Indication
-      if (heaterLedRef.current && heaterLightRef.current) {
+      // 3. Bright Yellow Light for Heater Indication
+      if (heaterBulbRef.current && heaterLightRef.current && heaterCoronaRef.current) {
         if (heaterActiveRef.current) {
-          // Warm pulsating yellow light
-          const pulse = 0.85 + Math.sin(elapsed * 5) * 0.15;
-          heaterLedRef.current.material.color.setHex(0xffd700);
-          heaterLightRef.current.intensity = 2.0 * pulse;
+          // Vivid pulsing yellow light
+          const pulse = 0.85 + Math.sin(elapsed * 6) * 0.15;
+          heaterBulbRef.current.material.color.setHex(0xffea00);
+          heaterBulbRef.current.material.emissive.setHex(0xffcc00);
+          heaterBulbRef.current.material.emissiveIntensity = 1.6 * pulse;
+
+          heaterCoronaRef.current.material.opacity = 0.45 * pulse;
+          heaterCoronaRef.current.scale.setScalar(1 + Math.sin(elapsed * 6) * 0.1);
+
+          heaterLightRef.current.intensity = 4.2 * pulse;
+
+          // Warm glow on thermal strips
+          heaterStripsRef.current.forEach((s) => {
+            s.material.emissive.setHex(0xffaa00);
+            s.material.emissiveIntensity = 0.9 * pulse;
+          });
         } else {
-          heaterLedRef.current.material.color.setHex(0x221c00);
-          heaterLightRef.current.intensity = THREE.MathUtils.lerp(
-            heaterLightRef.current.intensity,
-            0,
-            0.1
-          );
+          // Off state: dark amber/unlit
+          heaterBulbRef.current.material.color.setHex(0x332800);
+          heaterBulbRef.current.material.emissive.setHex(0x110c00);
+          heaterBulbRef.current.material.emissiveIntensity = 0;
+
+          heaterCoronaRef.current.material.opacity = THREE.MathUtils.lerp(heaterCoronaRef.current.material.opacity, 0, 0.1);
+          heaterLightRef.current.intensity = THREE.MathUtils.lerp(heaterLightRef.current.intensity, 0, 0.1);
+
+          heaterStripsRef.current.forEach((s) => {
+            s.material.emissive.setHex(0x000000);
+            s.material.emissiveIntensity = 0;
+          });
         }
       }
 
@@ -556,53 +651,57 @@ export default function CubeSatSimulationCanvas({
       <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
       {/* TOP-LEFT HUD BADGE */}
-      <div className="absolute top-3 left-3 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded-lg px-3 py-1.5 text-[11px] font-mono text-gray-300 flex items-center space-x-2.5 shadow-xl z-10">
+      <div className="absolute top-3 left-3 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded-lg px-3 py-2 text-[11px] font-mono text-gray-300 flex items-center space-x-2.5 shadow-xl z-10">
         <div className={`w-2 h-2 rounded-full ${
           status === 'SAFE_MODE' ? 'bg-[#FF2A2A]' : 'bg-[#00F0FF]'
         } animate-ping`} />
-        <span className="font-bold text-white">{formFactor} BUS CLOSE-UP</span>
+        <span className="font-bold text-white tracking-wide">{formFactor} BUS CLOSE-UP</span>
         <span className="text-gray-600">|</span>
         <span className="text-gray-400">PANELS: </span>
-        <span className={solarPanelsDeployed ? 'text-[#00FF66] font-semibold' : 'text-[#FFB000] font-semibold'}>
-          {solarPanelsDeployed ? 'DEPLOYED (PARALLEL WINGS)' : 'STOWED (FLUSH)'}
+        <span className={solarPanelsDeployed ? 'text-[#00FF66] font-semibold flex items-center' : 'text-[#FFB000] font-semibold flex items-center'}>
+          <Zap size={11} className="mr-1" />
+          {solarPanelsDeployed ? 'DEPLOYED (PARALLEL WINGS)' : 'STOWED (FLUSH ON BODY)'}
         </span>
       </div>
 
-      {/* TOP-RIGHT SPEED & HEATER STATUS HUD (Requested by User) */}
-      <div className="absolute top-3 right-3 flex items-center space-x-2 z-10">
+      {/* TOP-RIGHT SPEED & HEATER STATUS HUD (PROMINENT OVERLAY) */}
+      <div className="absolute top-3 right-3 flex items-center space-x-2.5 z-10">
         
-        {/* Heater Indicator Badge (Yellow Light) */}
-        <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border font-mono text-xs backdrop-blur-md shadow-xl transition-all ${
+        {/* Heater Indicator Badge (Vivid Yellow Light) */}
+        <div className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg border font-mono text-xs backdrop-blur-md shadow-xl transition-all ${
           heaterActive
-            ? 'bg-[#FFD700]/15 border-[#FFD700] text-[#FFD700] shadow-[0_0_15px_rgba(255,215,0,0.3)]'
+            ? 'bg-[#FFD700]/25 border-[#FFD700] text-[#FFEA00] shadow-[0_0_20px_rgba(255,234,0,0.4)]'
             : 'bg-[#0A0F1F]/90 border-gray-800 text-gray-400'
         }`}>
-          <div className={`w-2.5 h-2.5 rounded-full ${
-            heaterActive ? 'bg-[#FFD700] animate-pulse shadow-[0_0_8px_#ffd700]' : 'bg-gray-700'
+          <div className={`w-3 h-3 rounded-full ${
+            heaterActive ? 'bg-[#FFEA00] animate-pulse shadow-[0_0_12px_#ffea00]' : 'bg-gray-700'
           }`} />
-          <Thermometer size={13} className={heaterActive ? 'text-[#FFD700]' : 'text-gray-500'} />
-          <span className="font-bold">{heaterActive ? 'HEATER ON (YELLOW LIGHT)' : 'HEATER OFF'}</span>
+          <Thermometer size={14} className={heaterActive ? 'text-[#FFEA00]' : 'text-gray-500'} />
+          <span className="font-bold tracking-wide">
+            {heaterActive ? 'HEATER: ON (YELLOW BEACON ACTIVE)' : 'HEATER: OFF'}
+          </span>
         </div>
 
-        {/* Speed Status HUD (Requested by User) */}
-        <div className="flex items-center space-x-2.5 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded-lg px-3 py-1.5 font-mono shadow-xl">
-          <Gauge size={14} className="text-[#00F0FF]" />
+        {/* Speed Status HUD (Highlighted Speedometer) */}
+        <div className="flex items-center space-x-2.5 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded-lg px-3.5 py-2 font-mono shadow-xl">
+          <Gauge size={16} className="text-[#00F0FF]" />
           <div>
-            <div className="text-[9px] text-gray-400 tracking-wider">SPEED STATUS</div>
-            <div className="text-white font-bold text-xs flex items-baseline space-x-1">
-              <span className="text-[#00F0FF] text-sm">{speed}</span>
+            <div className="text-[9px] text-gray-400 tracking-wider">ORBITAL SPEED</div>
+            <div className="text-white font-bold text-sm flex items-baseline space-x-1">
+              <span className="text-[#00F0FF] text-base">{speed}</span>
               <span className="text-[10px] text-gray-400">km/s</span>
+              <span className="text-[10px] text-gray-500 ml-1">({(speed * 3600).toFixed(0)} km/h)</span>
             </div>
           </div>
         </div>
 
       </div>
 
-      {/* THRUSTER ACTIVE POPUP NOTICE WHEN FIRING */}
+      {/* THRUSTER CLOUD BURST ACTIVE POPUP BANNER */}
       {(isThrusting || status === 'THRUSTER_BURN') && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-[#FF6600]/20 border border-[#FF6600] backdrop-blur-md text-[#FF8800] px-4 py-1.5 rounded-full font-mono text-xs font-bold flex items-center space-x-2 shadow-[0_0_20px_rgba(255,102,0,0.4)] animate-bounce z-10">
-          <Flame size={14} className="text-[#FF8800]" />
-          <span>COLD-GAS THRUST FIRING (ORANGE CLOUD EXHAUST ACTIVE)</span>
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-[#FF6600]/25 border-2 border-[#FF6600] backdrop-blur-md text-[#FFAA00] px-5 py-2 rounded-full font-mono text-xs font-bold flex items-center space-x-2.5 shadow-[0_0_30px_rgba(255,102,0,0.5)] animate-bounce z-10">
+          <Flame size={16} className="text-[#FF6600] animate-pulse" />
+          <span>COLD-GAS CLOUD BURST FIRING (ORANGE GAS CLOUDS ACTIVE)</span>
         </div>
       )}
     </div>
