@@ -245,7 +245,7 @@ export default function CubeSatStudio() {
   };
 
   return (
-    <div className="h-[calc(100vh-5rem)] flex flex-col bg-[#050810] text-gray-200 font-sans select-none overflow-hidden animate-in fade-in duration-300">
+    <div className="h-full w-full flex flex-col bg-[#050810] text-gray-200 font-sans select-none overflow-hidden animate-in fade-in duration-300">
       
       {/* 1. TOP HEADER TOOLBAR (Matching 3D DESIGN STUDIO.png) */}
       <header className="h-14 bg-[#0A0F1F] border-b border-gray-800 px-6 flex items-center justify-between shrink-0 z-30">

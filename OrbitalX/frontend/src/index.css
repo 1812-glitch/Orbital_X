@@ -13,6 +13,13 @@
 }
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
   body {
     @apply bg-deep-navy text-gray-200 antialiased selection:bg-tech-cyan selection:text-deep-navy;
   }

@@ -46,9 +46,12 @@ export default function DashboardLayout() {
   // Mobile navigation drawer state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Close mobile drawer on route change
+  // Close mobile drawer and reset window scroll on route change
   useEffect(() => {
     setMobileMenuOpen(false);
+    window.scrollTo(0, 0);
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
   }, [location.pathname]);
 
   const fetchNotificationData = async () => {
@@ -471,11 +474,17 @@ export default function DashboardLayout() {
         )}
 
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
+        <main className={`flex-1 relative ${
+          location.pathname === '/studio'
+            ? 'overflow-hidden p-0'
+            : 'overflow-y-auto p-4 sm:p-6 lg:p-8'
+        }`}>
           {/* Subtle background glow for depth */}
           <div className="fixed top-0 right-0 w-[800px] h-[800px] bg-gradient-to-b from-[#00F0FF]/5 to-transparent rounded-full blur-[150px] -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
           
-          <div className="relative z-10 max-w-[1400px] mx-auto">
+          <div className={`relative z-10 mx-auto ${
+            location.pathname === '/studio' ? 'h-full w-full max-w-full' : 'max-w-[1400px]'
+          }`}>
             <Outlet />
           </div>
         </main>

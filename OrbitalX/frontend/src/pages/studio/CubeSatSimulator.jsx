@@ -104,10 +104,10 @@ export default function CubeSatSimulator() {
     }
   };
 
-  // Auto-scroll terminal log
+  // Auto-scroll terminal log without scrolling parent windows
   useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (terminalEndRef.current && terminalEndRef.current.parentElement) {
+      terminalEndRef.current.parentElement.scrollTop = terminalEndRef.current.parentElement.scrollHeight;
     }
   }, [simState?.commandHistory]);
 
