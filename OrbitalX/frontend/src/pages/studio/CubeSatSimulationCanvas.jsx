@@ -31,6 +31,7 @@ export default function CubeSatSimulationCanvas({
   const heaterLightRef = useRef(null);
   const heaterStripsRef = useRef([]);
   const animIdRef = useRef(null);
+  const panelHudSpanRef = useRef(null);
 
   // Dynamic state refs for animation loop
   const solarPanelsDeployedRef = useRef(solarPanelsDeployed);
@@ -636,24 +637,44 @@ export default function CubeSatSimulationCanvas({
     // =========================================================================
     // 14. ANIMATION LOOP
     // =========================================================================
-    let clock = new THREE.Clock();
-    const animate = () => {
+    let lastTime = performance.now();
+    const animate = (timestamp) => {
       animIdRef.current = requestAnimationFrame(animate);
-      const elapsed = clock.getElapsedTime();
+      const now = timestamp || performance.now();
+      const delta = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+      const elapsed = now * 0.001;
 
       controls.update();
 
       // 1. Smooth Origami Zig-Zag Accordion Solar Wings Fold / Unfold Animation (Delta-time based)
-      const delta = Math.min(clock.getDelta(), 0.1);
       const targetF = solarPanelsDeployedRef.current ? 0.0 : 1.0;
-      const speed = 1.8; // Smooth 0.55s complete fold/unfold duration
+      // Duration requirement: 8-10 seconds.
+      // Speed = 1.0 / 9.0s (~0.1111/s) ensures full fold/unfold travel takes exactly 9.0 seconds.
+      const speed = 1.0 / 9.0;
       const diff = targetF - foldProgressRef.current;
-      if (Math.abs(diff) < 0.01) {
+      if (Math.abs(diff) < 0.002) {
         foldProgressRef.current = targetF;
       } else {
         foldProgressRef.current += Math.sign(diff) * Math.min(Math.abs(diff), delta * speed);
       }
       const f = foldProgressRef.current;
+
+      // Update real-time 8-10s deployment/stow HUD indicator dynamically
+      if (panelHudSpanRef.current) {
+        const remainingDiff = Math.abs(targetF - f);
+        if (remainingDiff >= 0.002) {
+          if (targetF === 0.0) {
+            const pct = Math.min(99, Math.max(1, Math.round((1.0 - f) * 100)));
+            panelHudSpanRef.current.innerText = `DEPLOYING (${pct}%)`;
+          } else {
+            const pct = Math.min(99, Math.max(1, Math.round(f * 100)));
+            panelHudSpanRef.current.innerText = `STOWING (${pct}%)`;
+          }
+        } else {
+          panelHudSpanRef.current.innerText = targetF === 0.0 ? 'DEPLOYED (COPLANAR)' : 'STOWED (ORIGAMI Z-FOLD)';
+        }
+      }
 
       const left = leftOrigamiRef.current;
       if (left.joint0 && left.joint1 && left.joint2) {
@@ -836,7 +857,9 @@ export default function CubeSatSimulationCanvas({
         <span className="text-gray-400">PANELS: </span>
         <span className={solarPanelsDeployed ? 'text-[#00FF66] font-semibold flex items-center' : 'text-[#FFB000] font-semibold flex items-center'}>
           <Zap size={11} className="mr-1" />
-          {solarPanelsDeployed ? 'DEPLOYED (PARALLEL WINGS)' : 'STOWED (FLUSH ON BODY)'}
+          <span ref={panelHudSpanRef}>
+            {solarPanelsDeployed ? 'DEPLOYED (COPLANAR)' : 'STOWED (ORIGAMI Z-FOLD)'}
+          </span>
         </span>
       </div>
 

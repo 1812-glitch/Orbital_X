@@ -52,6 +52,17 @@ export default function CubeSatSimulator() {
   const [burstCycle, setBurstCycle] = useState('READY');
   const [burstCountdown, setBurstCountdown] = useState(0);
 
+  // Solar panels deployment cycle: null | 'DEPLOYING' | 'STOWING' (8-10 seconds realistic actuation duration)
+  const [panelTransit, setPanelTransit] = useState(null);
+  const [panelCountdown, setPanelCountdown] = useState(0);
+  const panelIntervalRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (panelIntervalRef.current) clearInterval(panelIntervalRef.current);
+    };
+  }, []);
+
   // Collapsible sidebar state (User Request: convert 2 boxes to closable sidebar & make cubesat area bigger)
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState('ALL'); // 'ALL' | 'COMMANDS' | 'STREAM'
@@ -144,11 +155,43 @@ export default function CubeSatSimulator() {
       if (burstCycle !== 'READY') return;
       triggerColdGasBurst();
     } 
-    // 2. Solar Panels Deploy & Stow
+    // 2. Solar Panels Deploy & Stow (8-10s realistic actuation time)
     else if (['DEPLOY_SOLAR_PANELS', 'DEPLOY_PANELS', 'DEPLOY'].includes(cmdUpper)) {
+      if (panelTransit) return;
       setSimState((prev) => prev ? { ...prev, solarPanelsDeployed: true } : prev);
+      setPanelTransit('DEPLOYING');
+      setPanelCountdown(9);
+      if (panelIntervalRef.current) clearInterval(panelIntervalRef.current);
+      let count = 9;
+      panelIntervalRef.current = setInterval(() => {
+        count -= 1;
+        if (count <= 0) {
+          clearInterval(panelIntervalRef.current);
+          panelIntervalRef.current = null;
+          setPanelTransit(null);
+          setPanelCountdown(0);
+        } else {
+          setPanelCountdown(count);
+        }
+      }, 1000);
     } else if (['STOW_SOLAR_PANELS', 'STOW_PANELS', 'RETRACT_SOLAR_PANELS', 'STOW'].includes(cmdUpper)) {
+      if (panelTransit) return;
       setSimState((prev) => prev ? { ...prev, solarPanelsDeployed: false } : prev);
+      setPanelTransit('STOWING');
+      setPanelCountdown(9);
+      if (panelIntervalRef.current) clearInterval(panelIntervalRef.current);
+      let count = 9;
+      panelIntervalRef.current = setInterval(() => {
+        count -= 1;
+        if (count <= 0) {
+          clearInterval(panelIntervalRef.current);
+          panelIntervalRef.current = null;
+          setPanelTransit(null);
+          setPanelCountdown(0);
+        } else {
+          setPanelCountdown(count);
+        }
+      }, 1000);
     } 
     // 3. Thermal Heaters Toggle
     else if (['CYCLE_HEATERS', 'HEATERS_ON', 'TOGGLE_HEATERS', 'HEATERS', 'HEATER'].includes(cmdUpper)) {
@@ -435,8 +478,14 @@ export default function CubeSatSimulator() {
             <span className="text-xs font-mono tracking-widest uppercase flex items-center">
               <BatteryCharging size={15} className="mr-1.5 text-[#00F0FF]" /> BATTERY & POWER
             </span>
-            <span className={`text-[10px] font-mono font-bold ${sat.solarPanelsDeployed ? 'text-[#00FF66]' : 'text-[#FFB000]'}`}>
-              {sat.solarPanelsDeployed ? 'WINGS DEPLOYED' : 'WINGS STOWED'}
+            <span className={`text-[10px] font-mono font-bold ${
+              panelTransit === 'DEPLOYING' ? 'text-[#00F0FF] animate-pulse' :
+              panelTransit === 'STOWING' ? 'text-[#FFB000] animate-pulse' :
+              sat.solarPanelsDeployed ? 'text-[#00FF66]' : 'text-[#FFB000]'
+            }`}>
+              {panelTransit === 'DEPLOYING' ? `DEPLOYING (${panelCountdown}s)` :
+               panelTransit === 'STOWING' ? `STOWING (${panelCountdown}s)` :
+               sat.solarPanelsDeployed ? 'WINGS DEPLOYED' : 'WINGS STOWED'}
             </span>
           </div>
           <div className="flex items-baseline space-x-2">
@@ -672,36 +721,46 @@ export default function CubeSatSimulator() {
                   <div>
                     <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 uppercase tracking-widest mb-1.5">
                       <span>1. SOLAR WING ARRAYS</span>
-                      <span className={sat.solarPanelsDeployed ? 'text-[#00FF66] font-bold' : 'text-[#FFB000] font-bold'}>
-                        {sat.solarPanelsDeployed ? 'DEPLOYED (COPLANAR)' : 'STOWED (ORIGAMI Z-FOLD)'}
+                      <span className={
+                        panelTransit === 'DEPLOYING' ? 'text-[#00F0FF] font-bold animate-pulse' :
+                        panelTransit === 'STOWING' ? 'text-[#FFB000] font-bold animate-pulse' :
+                        sat.solarPanelsDeployed ? 'text-[#00FF66] font-bold' : 'text-[#FFB000] font-bold'
+                      }>
+                        {panelTransit === 'DEPLOYING' ? `DEPLOYING (${panelCountdown}s)` :
+                         panelTransit === 'STOWING' ? `STOWING (${panelCountdown}s)` :
+                         sat.solarPanelsDeployed ? 'DEPLOYED (COPLANAR)' : 'STOWED (ORIGAMI Z-FOLD)'}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => handleSendCommand('DEPLOY_SOLAR_PANELS')}
-                        disabled={sat.solarPanelsDeployed}
+                        disabled={sat.solarPanelsDeployed || panelTransit !== null}
                         className={`flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded text-xs font-mono tracking-wider transition-all border ${
                           sat.solarPanelsDeployed
                             ? 'bg-[#00FF66]/10 border-[#00FF66]/30 text-[#00FF66] opacity-60 cursor-not-allowed'
+                            : panelTransit === 'DEPLOYING'
+                            ? 'bg-[#00F0FF]/25 border-[#00F0FF] text-[#00F0FF] animate-pulse shadow-[0_0_15px_rgba(0,240,255,0.4)]'
                             : 'bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border-[#00F0FF]/50 text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.2)]'
                         }`}
-                        title="Unfold 3-panel origami solar array wings outward symmetrically"
+                        title="Unfold 3-panel origami solar array wings outward symmetrically (takes 9 seconds)"
                       >
-                        <Zap size={13} />
-                        <span>{sat.solarPanelsDeployed ? 'DEPLOYED' : 'DEPLOY PANELS'}</span>
+                        <Zap size={13} className={panelTransit === 'DEPLOYING' ? 'animate-bounce' : ''} />
+                        <span>{panelTransit === 'DEPLOYING' ? `DEPLOYING (${panelCountdown}s)` : sat.solarPanelsDeployed ? 'DEPLOYED' : 'DEPLOY PANELS'}</span>
                       </button>
                       <button
                         onClick={() => handleSendCommand('STOW_SOLAR_PANELS')}
-                        disabled={!sat.solarPanelsDeployed}
+                        disabled={!sat.solarPanelsDeployed || panelTransit !== null}
                         className={`flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded text-xs font-mono tracking-wider transition-all border ${
                           !sat.solarPanelsDeployed
                             ? 'bg-[#FFB000]/10 border-[#FFB000]/30 text-[#FFB000] opacity-60 cursor-not-allowed'
+                            : panelTransit === 'STOWING'
+                            ? 'bg-[#FFB000]/25 border-[#FFB000] text-[#FFB000] animate-pulse shadow-[0_0_15px_rgba(255,176,0,0.4)]'
                             : 'bg-gray-800/90 hover:bg-gray-700 border-gray-700 text-gray-200'
                         }`}
-                        title="Fold solar wings into parallel origami zigzag stack flush with chassis side"
+                        title="Fold solar wings into parallel origami zigzag stack flush with chassis side (takes 9 seconds)"
                       >
-                        <RotateCcw size={13} />
-                        <span>{!sat.solarPanelsDeployed ? 'STOWED' : 'STOW PANELS'}</span>
+                        <RotateCcw size={13} className={panelTransit === 'STOWING' ? 'animate-spin' : ''} />
+                        <span>{panelTransit === 'STOWING' ? `STOWING (${panelCountdown}s)` : !sat.solarPanelsDeployed ? 'STOWED' : 'STOW PANELS'}</span>
                       </button>
                     </div>
                   </div>
