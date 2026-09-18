@@ -19,8 +19,9 @@ export default function CubeSatSimulationCanvas({
   const rendererRef = useRef(null);
   const controlsRef = useRef(null);
   const satGroupRef = useRef(null);
-  const leftPivotRef = useRef(null);
-  const rightPivotRef = useRef(null);
+  const leftOrigamiRef = useRef({ joint0: null, joint1: null, joint2: null });
+  const rightOrigamiRef = useRef({ joint0: null, joint1: null, joint2: null });
+  const foldProgressRef = useRef(solarPanelsDeployed ? 0 : 1);
   const plumeGroupRef = useRef(null);
   const thrustLightRef = useRef(null);
   const gasCloudsRef = useRef([]);
@@ -214,89 +215,242 @@ export default function CubeSatSimulationCanvas({
     // When STOWED: they fold flush against the sides of the chassis!
     // When DEPLOYED: they unfold outward symmetrically like majestic solar arrays!
     // =========================================================================
-    const wingW = 3.6; // Wide, magnificent solar array wings
-    const wingH = chassisH * 0.88;
-    const wingD = 0.05;
+    // =========================================================================
+    // 8. DEPLOYABLE SOLAR WINGS: 3-SEGMENT ORIGAMI ZIG-ZAG (ACCORDION / Z-FOLD)
+    // - Each wing has 3 hinged segments.
+    // - When DEPLOYED (f = 0): Unfolds into a wide, coplanar, flat solar array
+    //   extending outward symmetrically on -X and +X, facing +Z.
+    // - When STOWING (0 < f < 1): Joint angles alternate in an origami zig-zag
+    //   accordion wave.
+    // - When FULLY STOWED (f = 1): Folds into a flat, parallel sandwich stack
+    //   resting flush against the side face of the chassis.
+    // - CRITICAL CONSTRAINT: Each segment width (segW = 1.95) is strictly LESS
+    //   than chassisD (2.2). It NEVER exceeds the front, back, top, or bottom
+    //   borders of the CubeSat side face!
+    // =========================================================================
+    const segW = 1.95; // Strictly within chassisD (2.2) length with margin!
+    const segH = chassisH * 0.86; // Strictly within chassisH (6.6) height
+    const segD = 0.045; // Thickness of each panel segment
+    const zRoot = chassisD / 2 - 0.125; // 0.975 -> stowed stack spans [+0.975, -0.975], well inside [-1.1, +1.1]!
 
-    // LEFT WING ASSEMBLY
-    // Pivot at left edge of the bus: (-chassisW / 2, 0, 0)
-    const leftPivot = new THREE.Group();
-    leftPivot.position.set(-chassisW / 2, 0, 0);
-    satGroup.add(leftPivot);
-    leftPivotRef.current = leftPivot;
-
-    // Left Wing Group: centered at (-wingW / 2, 0, 0) relative to pivot
-    const leftWingGroup = new THREE.Group();
-    leftPivot.add(leftWingGroup);
-
-    // Wing Sub-panels (3 segments per wing with gold dividers)
-    const leftWingBase = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, wingD), cellMat);
-    leftWingBase.position.set(-wingW / 2, 0, 0);
-    leftWingGroup.add(leftWingBase);
-
-    // Left Gold Frame Border
-    const wingFrameMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
-    const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(wingW + 0.04, wingH + 0.04, wingD + 0.01), wingFrameMat);
-    leftFrame.position.set(-wingW / 2, 0, -0.005);
-    leftWingGroup.add(leftFrame);
-
-    // Left Wing Segment Dividers (creating realistic solar cell segments)
-    for (let s = 1; s <= 2; s++) {
-      const segX = -(s * wingW) / 3;
-      const segRib = new THREE.Mesh(new THREE.BoxGeometry(0.04, wingH, wingD + 0.02), wingFrameMat);
-      segRib.position.set(segX, 0, 0);
-      leftWingGroup.add(segRib);
-    }
-
-    // Left Hinge Cylinders
-    const hingeMat = new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 0.9, roughness: 0.2 });
-    [-wingH * 0.35, 0, wingH * 0.35].forEach((hy) => {
-      const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 16), hingeMat);
-      hinge.position.set(0, hy, 0);
-      leftPivot.add(hinge);
+    // Aerospace Materials for Solar Wings
+    const wingFrameMat = new THREE.MeshStandardMaterial({
+      color: 0xd4af37,
+      metalness: 0.95,
+      roughness: 0.2
+    });
+    const backingMat = new THREE.MeshStandardMaterial({
+      color: 0x141824,
+      roughness: 0.8,
+      metalness: 0.3
+    });
+    const hingeMat = new THREE.MeshStandardMaterial({
+      color: 0x9aa2b4,
+      metalness: 0.92,
+      roughness: 0.25
+    });
+    const pinMat = new THREE.MeshStandardMaterial({
+      color: 0xdddddd,
+      metalness: 0.98,
+      roughness: 0.12
+    });
+    const flexJumperMat = new THREE.MeshStandardMaterial({
+      color: 0xcca033,
+      metalness: 0.9,
+      roughness: 0.3
+    });
+    const snubberMat = new THREE.MeshStandardMaterial({
+      color: 0x222633,
+      roughness: 0.85
     });
 
-    // RIGHT WING ASSEMBLY
-    // Pivot at right edge of the bus: (+chassisW / 2, 0, 0)
-    const rightPivot = new THREE.Group();
-    rightPivot.position.set(chassisW / 2, 0, 0);
-    satGroup.add(rightPivot);
-    rightPivotRef.current = rightPivot;
+    // Helper: Build a high-fidelity solar wing segment mesh
+    const buildSegment = (isLeftWing, segIndex) => {
+      const segGroup = new THREE.Group();
 
-    const rightWingGroup = new THREE.Group();
-    rightPivot.add(rightWingGroup);
+      // 1. Silicon Photovoltaic Cells (Front face)
+      const cellGeo = new THREE.BoxGeometry(segW - 0.04, segH - 0.04, segD);
+      const cellMesh = new THREE.Mesh(cellGeo, cellMat);
+      segGroup.add(cellMesh);
 
-    const rightWingBase = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, wingD), cellMat);
-    rightWingBase.position.set(wingW / 2, 0, 0);
-    rightWingGroup.add(rightWingBase);
+      // 2. Beveled Gold Frame Perimeter
+      const frameGeo = new THREE.BoxGeometry(segW, segH, segD - 0.005);
+      const frameMesh = new THREE.Mesh(frameGeo, wingFrameMat);
+      segGroup.add(frameMesh);
 
-    const rightFrame = new THREE.Mesh(new THREE.BoxGeometry(wingW + 0.04, wingH + 0.04, wingD + 0.01), wingFrameMat);
-    rightFrame.position.set(wingW / 2, 0, -0.005);
-    rightWingGroup.add(rightFrame);
+      // 3. Carbon-composite protective substrate on rear
+      const backGeo = new THREE.PlaneGeometry(segW - 0.02, segH - 0.02);
+      const backMesh = new THREE.Mesh(backGeo, backingMat);
+      backMesh.rotation.y = Math.PI;
+      backMesh.position.set(0, 0, -segD / 2 - 0.002);
+      segGroup.add(backMesh);
 
-    // Right Wing Segment Dividers
-    for (let s = 1; s <= 2; s++) {
-      const segX = (s * wingW) / 3;
-      const segRib = new THREE.Mesh(new THREE.BoxGeometry(0.04, wingH, wingD + 0.02), wingFrameMat);
-      segRib.position.set(segX, 0, 0);
-      rightWingGroup.add(segRib);
-    }
+      // 4. Photovoltaic Micro-mesh Cell Grid Lines
+      const divRows = 6;
+      for (let r = 1; r < divRows; r++) {
+        const dy = -segH / 2 + (r * segH) / divRows;
+        const divGeo = new THREE.BoxGeometry(segW - 0.06, 0.015, 0.004);
+        const divMat = new THREE.MeshBasicMaterial({ color: 0x00d8ff, transparent: true, opacity: 0.5 });
+        const divLine = new THREE.Mesh(divGeo, divMat);
+        divLine.position.set(0, dy, segD / 2 + 0.003);
+        segGroup.add(divLine);
+      }
+      // Vertical Center Silver Collector Busbar
+      const vBusGeo = new THREE.BoxGeometry(0.018, segH - 0.08, 0.004);
+      const vBusMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.95 });
+      const vBus = new THREE.Mesh(vBusGeo, vBusMat);
+      vBus.position.set(0, 0, segD / 2 + 0.003);
+      segGroup.add(vBus);
 
-    // Right Hinge Cylinders
-    [-wingH * 0.35, 0, wingH * 0.35].forEach((hy) => {
-      const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.25, 16), hingeMat);
-      hinge.position.set(0, hy, 0);
-      rightPivot.add(hinge);
-    });
+      // 5. Corner Magnetic Standoff Snubbers (Parallel stack dampers)
+      const snubberOffsets = [
+        [-segW * 0.44, segH * 0.44],
+        [-segW * 0.44, -segH * 0.44],
+        [segW * 0.44, segH * 0.44],
+        [segW * 0.44, -segH * 0.44]
+      ];
+      snubberOffsets.forEach(([sx, sy]) => {
+        const snubber = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, segD + 0.008, 8), snubberMat);
+        snubber.rotation.x = Math.PI / 2;
+        snubber.position.set(sx, sy, 0);
+        segGroup.add(snubber);
+      });
 
-    // Initial Wing Angles:
-    // When DEPLOYED: rotation.y = 0 -> Left wing points -X, Right wing points +X. Parallel and coplanar!
-    // When STOWED: Left pivot rotates +90° (+Math.PI / 2) -> folds flat along left side!
-    //              Right pivot rotates -90° (-Math.PI / 2) -> folds flat along right side!
-    const initLeft = solarPanelsDeployed ? 0 : Math.PI / 2;
-    const initRight = solarPanelsDeployed ? 0 : -Math.PI / 2;
-    leftPivot.rotation.y = initLeft;
-    rightPivot.rotation.y = initRight;
+      return segGroup;
+    };
+
+    // Helper: Precision mechanical hinge barrels at top, center, and bottom
+    const createHingeBarrels = (h) => {
+      const hingeGroup = new THREE.Group();
+      const hingeHeights = [-h * 0.36, 0, h * 0.36];
+      hingeHeights.forEach((hy) => {
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.24, 16), hingeMat);
+        barrel.position.set(0, hy, 0);
+        hingeGroup.add(barrel);
+
+        const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.30, 16), pinMat);
+        pin.position.set(0, hy, 0);
+        hingeGroup.add(pin);
+
+        const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.08), wingFrameMat);
+        bracket.position.set(0, hy, 0);
+        hingeGroup.add(bracket);
+      });
+      return hingeGroup;
+    };
+
+    // Helper: Flexible printed circuit jumper loops bridging hinge lines
+    const createFlexJumpers = (h) => {
+      const jumperGroup = new THREE.Group();
+      [-h * 0.18, h * 0.18].forEach((jy) => {
+        const torusGeo = new THREE.TorusGeometry(0.045, 0.012, 8, 16, Math.PI);
+        const torus = new THREE.Mesh(torusGeo, flexJumperMat);
+        torus.rotation.z = Math.PI / 2;
+        torus.position.set(0, jy, 0.035);
+        jumperGroup.add(torus);
+      });
+      return jumperGroup;
+    };
+
+    // --- BUILD LEFT WING ORIGAMI ASSEMBLY ---
+    // Root Hinge (Joint 0): Mounted on left chassis edge (-chassisW / 2, 0, zRoot)
+    const leftJoint0 = new THREE.Group();
+    leftJoint0.position.set(-chassisW / 2, 0, zRoot);
+    satGroup.add(leftJoint0);
+    leftJoint0.add(createHingeBarrels(segH));
+
+    // Left Segment 1 (Inner panel)
+    const leftSeg1 = buildSegment(true, 1);
+    leftSeg1.position.set(-segW / 2, 0, 0);
+    leftJoint0.add(leftSeg1);
+
+    // Left Joint 1 (between Segment 1 and Segment 2)
+    const leftJoint1 = new THREE.Group();
+    leftJoint1.position.set(-segW, 0, 0);
+    leftJoint0.add(leftJoint1);
+    leftJoint1.add(createHingeBarrels(segH));
+    leftJoint1.add(createFlexJumpers(segH));
+
+    // Left Segment 2 (Middle panel)
+    const leftSeg2 = buildSegment(true, 2);
+    leftSeg2.position.set(-segW / 2, 0, 0);
+    leftJoint1.add(leftSeg2);
+
+    // Left Joint 2 (between Segment 2 and Segment 3)
+    const leftJoint2 = new THREE.Group();
+    leftJoint2.position.set(-segW, 0, 0);
+    leftJoint1.add(leftJoint2);
+    leftJoint2.add(createHingeBarrels(segH));
+    leftJoint2.add(createFlexJumpers(segH));
+
+    // Left Segment 3 (Outer tip panel)
+    const leftSeg3 = buildSegment(true, 3);
+    leftSeg3.position.set(-segW / 2, 0, 0);
+    leftJoint2.add(leftSeg3);
+
+    leftOrigamiRef.current = {
+      joint0: leftJoint0,
+      joint1: leftJoint1,
+      joint2: leftJoint2
+    };
+
+    // --- BUILD RIGHT WING ORIGAMI ASSEMBLY ---
+    // Root Hinge (Joint 0): Mounted on right chassis edge (+chassisW / 2, 0, zRoot)
+    const rightJoint0 = new THREE.Group();
+    rightJoint0.position.set(chassisW / 2, 0, zRoot);
+    satGroup.add(rightJoint0);
+    rightJoint0.add(createHingeBarrels(segH));
+
+    // Right Segment 1 (Inner panel)
+    const rightSeg1 = buildSegment(false, 1);
+    rightSeg1.position.set(segW / 2, 0, 0);
+    rightJoint0.add(rightSeg1);
+
+    // Right Joint 1 (between Segment 1 and Segment 2)
+    const rightJoint1 = new THREE.Group();
+    rightJoint1.position.set(segW, 0, 0);
+    rightJoint0.add(rightJoint1);
+    rightJoint1.add(createHingeBarrels(segH));
+    rightJoint1.add(createFlexJumpers(segH));
+
+    // Right Segment 2 (Middle panel)
+    const rightSeg2 = buildSegment(false, 2);
+    rightSeg2.position.set(segW / 2, 0, 0);
+    rightJoint1.add(rightSeg2);
+
+    // Right Joint 2 (between Segment 2 and Segment 3)
+    const rightJoint2 = new THREE.Group();
+    rightJoint2.position.set(segW, 0, 0);
+    rightJoint1.add(rightJoint2);
+    rightJoint2.add(createHingeBarrels(segH));
+    rightJoint2.add(createFlexJumpers(segH));
+
+    // Right Segment 3 (Outer tip panel)
+    const rightSeg3 = buildSegment(false, 3);
+    rightSeg3.position.set(segW / 2, 0, 0);
+    rightJoint2.add(rightSeg3);
+
+    rightOrigamiRef.current = {
+      joint0: rightJoint0,
+      joint1: rightJoint1,
+      joint2: rightJoint2
+    };
+
+    // Apply immediate initial posture without animation delay
+    const initF = solarPanelsDeployed ? 0.0 : 1.0;
+    foldProgressRef.current = initF;
+
+    leftJoint0.rotation.y = -initF * (Math.PI / 2);
+    leftJoint1.rotation.y = initF * Math.PI;
+    leftJoint1.position.z = initF * 0.065;
+    leftJoint2.rotation.y = -initF * Math.PI;
+    leftJoint2.position.z = -initF * 0.065;
+
+    rightJoint0.rotation.y = initF * (Math.PI / 2);
+    rightJoint1.rotation.y = -initF * Math.PI;
+    rightJoint1.position.z = initF * 0.065;
+    rightJoint2.rotation.y = initF * Math.PI;
+    rightJoint2.position.z = -initF * 0.065;
 
     // 9. Payload Aperture Lens (Top Face)
     const lensRingGeo = new THREE.CylinderGeometry(0.55, 0.6, 0.2, 32);
@@ -489,22 +643,44 @@ export default function CubeSatSimulationCanvas({
 
       controls.update();
 
-      // 1. Smooth Solar Wings Fold / Unfold Animation (Lerp to Target)
-      if (leftPivotRef.current && rightPivotRef.current) {
-        // Target: 0 rad (fully extended outward horizontally) vs Math.PI/2 (folded flat along bus side walls)
-        const targetLeft = solarPanelsDeployedRef.current ? 0 : Math.PI / 2;
-        const targetRight = solarPanelsDeployedRef.current ? 0 : -Math.PI / 2;
+      // 1. Smooth Origami Zig-Zag Accordion Solar Wings Fold / Unfold Animation (Delta-time based)
+      const delta = Math.min(clock.getDelta(), 0.1);
+      const targetF = solarPanelsDeployedRef.current ? 0.0 : 1.0;
+      const speed = 1.8; // Smooth 0.55s complete fold/unfold duration
+      const diff = targetF - foldProgressRef.current;
+      if (Math.abs(diff) < 0.01) {
+        foldProgressRef.current = targetF;
+      } else {
+        foldProgressRef.current += Math.sign(diff) * Math.min(Math.abs(diff), delta * speed);
+      }
+      const f = foldProgressRef.current;
 
-        leftPivotRef.current.rotation.y = THREE.MathUtils.lerp(
-          leftPivotRef.current.rotation.y,
-          targetLeft,
-          0.05
-        );
-        rightPivotRef.current.rotation.y = THREE.MathUtils.lerp(
-          rightPivotRef.current.rotation.y,
-          targetRight,
-          0.05
-        );
+      const left = leftOrigamiRef.current;
+      if (left.joint0 && left.joint1 && left.joint2) {
+        // Joint 0: Root hinge rotates 0° -> -90° backward along left side wall towards -Z
+        left.joint0.rotation.y = -f * (Math.PI / 2);
+
+        // Joint 1: Alternates in origami zig-zag by 0° -> +180°
+        left.joint1.rotation.y = f * Math.PI;
+        left.joint1.position.z = f * 0.065; // Layer 2 thickness standoff
+
+        // Joint 2: Alternates in opposite direction by 0° -> -180°
+        left.joint2.rotation.y = -f * Math.PI;
+        left.joint2.position.z = -f * 0.065; // Layer 3 thickness standoff
+      }
+
+      const right = rightOrigamiRef.current;
+      if (right.joint0 && right.joint1 && right.joint2) {
+        // Joint 0: Root hinge rotates 0° -> +90° backward along right side wall towards -Z
+        right.joint0.rotation.y = f * (Math.PI / 2);
+
+        // Joint 1: Symmetrical origami zig-zag 0° -> -180°
+        right.joint1.rotation.y = -f * Math.PI;
+        right.joint1.position.z = f * 0.065; // Layer 2 thickness standoff
+
+        // Joint 2: Symmetrical accordion 0° -> +180°
+        right.joint2.rotation.y = f * Math.PI;
+        right.joint2.position.z = -f * 0.065; // Layer 3 thickness standoff
       }
 
       // 2. Animated Orange Cloud Thruster Burst

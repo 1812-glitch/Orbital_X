@@ -234,36 +234,65 @@ export default function CubeSatGlobeView({
     const cells = new THREE.Mesh(cellGeo, cellMat);
     group.add(cells);
 
-    // Deployable Solar Wings
-    const wingW = 1.4;
+    // Deployable 3-Segment Origami Solar Wings
+    const segW = depth * 0.88; // 0.70 - strictly within depth (0.80) side length border!
     const wingH = h * 0.85;
     const wingMat = new THREE.MeshStandardMaterial({
-      color: 0x003366,
+      color: 0x071b38,
       metalness: 0.95,
-      roughness: 0.1,
-      emissive: 0x002244,
-      emissiveIntensity: 0.6
+      roughness: 0.15,
+      emissive: 0x001533,
+      emissiveIntensity: 0.5
     });
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
 
-    // Left Wing (Hinged at front-left, extends outward along -X when deployed, folds along side when stowed)
-    const leftWing = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, 0.05), wingMat);
-    if (d.solarPanelsDeployed) {
-      leftWing.position.set(-w / 2 - wingW / 2, 0, 0);
-    } else {
-      leftWing.position.set(-w / 2 - 0.03, 0, -wingW / 2 + depth / 2);
-      leftWing.rotation.y = Math.PI / 2; // folded flush along side wall
-    }
-    group.add(leftWing);
+    const createWingSegment = () => {
+      const sGroup = new THREE.Group();
+      const cell = new THREE.Mesh(new THREE.BoxGeometry(segW - 0.02, wingH - 0.02, 0.035), wingMat);
+      sGroup.add(cell);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(segW, wingH, 0.03), frameMat);
+      sGroup.add(frame);
+      return sGroup;
+    };
 
-    // Right Wing (Hinged at front-right, extends outward along +X when deployed, folds along side when stowed)
-    const rightWing = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, 0.05), wingMat);
+    // Left Wing (3 segments)
+    const leftWingGroup = new THREE.Group();
+    const zRoot = depth / 2 - 0.06;
     if (d.solarPanelsDeployed) {
-      rightWing.position.set(w / 2 + wingW / 2, 0, 0);
+      // 3 segments deployed in a straight coplanar array along -X
+      for (let s = 0; s < 3; s++) {
+        const seg = createWingSegment();
+        seg.position.set(-w / 2 - segW / 2 - s * segW, 0, zRoot);
+        leftWingGroup.add(seg);
+      }
     } else {
-      rightWing.position.set(w / 2 + 0.03, 0, -wingW / 2 + depth / 2);
-      rightWing.rotation.y = -Math.PI / 2; // folded flush along side wall
+      // 3 segments folded in a parallel origami sandwich stack along side face
+      for (let s = 0; s < 3; s++) {
+        const seg = createWingSegment();
+        seg.rotation.y = Math.PI / 2;
+        seg.position.set(-w / 2 - 0.025 - s * 0.045, 0, zRoot - segW / 2);
+        leftWingGroup.add(seg);
+      }
     }
-    group.add(rightWing);
+    group.add(leftWingGroup);
+
+    // Right Wing (3 segments)
+    const rightWingGroup = new THREE.Group();
+    if (d.solarPanelsDeployed) {
+      for (let s = 0; s < 3; s++) {
+        const seg = createWingSegment();
+        seg.position.set(w / 2 + segW / 2 + s * segW, 0, zRoot);
+        rightWingGroup.add(seg);
+      }
+    } else {
+      for (let s = 0; s < 3; s++) {
+        const seg = createWingSegment();
+        seg.rotation.y = -Math.PI / 2;
+        seg.position.set(w / 2 + 0.025 + s * 0.045, 0, zRoot - segW / 2);
+        rightWingGroup.add(seg);
+      }
+    }
+    group.add(rightWingGroup);
 
     // Gold Rail Edges
     const railMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });

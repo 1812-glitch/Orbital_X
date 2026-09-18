@@ -673,7 +673,7 @@ export default function CubeSatSimulator() {
                     <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 uppercase tracking-widest mb-1.5">
                       <span>1. SOLAR WING ARRAYS</span>
                       <span className={sat.solarPanelsDeployed ? 'text-[#00FF66] font-bold' : 'text-[#FFB000] font-bold'}>
-                        {sat.solarPanelsDeployed ? 'DEPLOYED (PARALLEL)' : 'STOWED (FLUSH)'}
+                        {sat.solarPanelsDeployed ? 'DEPLOYED (COPLANAR)' : 'STOWED (ORIGAMI Z-FOLD)'}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -685,7 +685,7 @@ export default function CubeSatSimulator() {
                             ? 'bg-[#00FF66]/10 border-[#00FF66]/30 text-[#00FF66] opacity-60 cursor-not-allowed'
                             : 'bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border-[#00F0FF]/50 text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.2)]'
                         }`}
-                        title="Unfold solar array wings outward symmetrically"
+                        title="Unfold 3-panel origami solar array wings outward symmetrically"
                       >
                         <Zap size={13} />
                         <span>{sat.solarPanelsDeployed ? 'DEPLOYED' : 'DEPLOY PANELS'}</span>
@@ -698,7 +698,7 @@ export default function CubeSatSimulator() {
                             ? 'bg-[#FFB000]/10 border-[#FFB000]/30 text-[#FFB000] opacity-60 cursor-not-allowed'
                             : 'bg-gray-800/90 hover:bg-gray-700 border-gray-700 text-gray-200'
                         }`}
-                        title="Fold solar wings flush against CubeSat chassis"
+                        title="Fold solar wings into parallel origami zigzag stack flush with chassis side"
                       >
                         <RotateCcw size={13} />
                         <span>{!sat.solarPanelsDeployed ? 'STOWED' : 'STOW PANELS'}</span>
