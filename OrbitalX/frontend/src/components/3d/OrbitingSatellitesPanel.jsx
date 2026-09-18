@@ -84,7 +84,7 @@ export default function OrbitingSatellitesPanel({
   return (
     <div
       id="orbiting-satellites-panel"
-      className="absolute top-4 left-4 z-20 w-[420px] max-w-[calc(100vw-2rem)] max-h-[calc(100%-2rem)] flex flex-col bg-[#0A0F1F]/95 border border-[#00F0FF]/30 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.85)] backdrop-blur-xl transition-all duration-300 overflow-hidden font-sans"
+      className="absolute top-16 left-3 bottom-3 z-30 w-80 sm:w-96 max-w-[calc(100vw-2rem)] flex flex-col bg-[#0A0F1F]/95 border border-[#00F0FF]/30 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.85)] backdrop-blur-xl transition-all duration-300 overflow-hidden font-sans"
     >
       {/* 1. Header with Close Button and Active Selection Counter */}
       <OrbitingSatellitesHeader

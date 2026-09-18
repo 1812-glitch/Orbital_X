@@ -370,7 +370,7 @@ export default function CubeSatStudio() {
 
       {/* 2. MAIN CONTENT: SIMULATION VIEW OR 3-COLUMN CAD WORKSPACE */}
       {viewMode === 'SIMULATE' ? (
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-[#050810]">
+        <div className="flex-1 w-full h-full overflow-hidden bg-[#050810] relative">
           <CubeSatSimulator />
         </div>
       ) : (

@@ -10,7 +10,7 @@ export default function OrbitersHUDTrigger({
     <button
       onClick={onToggleOpen}
       id="btn-open-orbital-panel"
-      className="absolute top-4 left-4 z-20 flex items-center space-x-3 bg-[#0A0F1F]/90 hover:bg-[#12192b] border border-[#00F0FF]/40 hover:border-[#00F0FF] text-white px-4 py-2.5 rounded-lg shadow-[0_0_25px_rgba(0,240,255,0.2)] backdrop-blur-md transition-all duration-300 group cursor-pointer"
+      className="absolute top-16 left-3 z-20 flex items-center space-x-3 bg-[#0A0F1F]/90 hover:bg-[#12192b] border border-[#00F0FF]/40 hover:border-[#00F0FF] text-white px-4 py-2.5 rounded-xl shadow-[0_0_25px_rgba(0,240,255,0.2)] backdrop-blur-md transition-all duration-300 group cursor-pointer"
       title="Open Active Orbiters & Signal Matrix Panel"
     >
       <div className="relative flex items-center justify-center">
