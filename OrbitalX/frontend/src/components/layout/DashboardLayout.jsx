@@ -21,6 +21,7 @@ import {
   RadioTower,
   CheckCheck,
   X,
+  Menu,
   ExternalLink,
   Cpu
 } from 'lucide-react';
@@ -41,6 +42,14 @@ export default function DashboardLayout() {
   const [activeToast, setActiveToast] = useState(null);
   const notifRef = useRef(null);
   const lastCountRef = useRef(null);
+
+  // Mobile navigation drawer state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const fetchNotificationData = async () => {
     try {
@@ -260,10 +269,21 @@ export default function DashboardLayout() {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         
         {/* Top Navbar */}
-        <header className="h-16 bg-[#0A0F1F] border-b border-gray-800 flex items-center justify-between px-6 shrink-0 relative z-10">
+        <header className="h-16 bg-[#0A0F1F] border-b border-gray-800 flex items-center justify-between px-4 sm:px-6 shrink-0 relative z-10">
           
-          {/* Status Indicators */}
-          <div className="flex items-center space-x-6 text-[10px] font-mono tracking-widest uppercase">
+          {/* Status Indicators & Mobile Menu Toggle */}
+          <div className="flex items-center space-x-3 sm:space-x-6 text-[10px] font-mono tracking-widest uppercase">
+            {/* Mobile Navigation Toggle (visible on screens < md) */}
+            <button
+              id="mobile-nav-toggle-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-1.5 md:hidden text-gray-300 hover:text-white rounded border border-gray-800 hover:border-gray-700 bg-[#121C36] flex items-center justify-center transition-colors"
+              title="Toggle Navigation Menu"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X size={18} className="text-[#00F0FF]" /> : <Menu size={18} />}
+            </button>
+
             <div className="flex items-center space-x-2">
               <div className={`w-1.5 h-1.5 rounded-full ${sysStatus.sim ? 'bg-[#00FF66] shadow-[0_0_5px_#00FF66]' : 'bg-[#FF2A2A] shadow-[0_0_5px_#FF2A2A]'}`}></div>
               <span className={sysStatus.sim ? 'text-[#00FF66]' : 'text-[#FF2A2A]'}>
@@ -451,7 +471,7 @@ export default function DashboardLayout() {
         )}
 
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8 relative">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
           {/* Subtle background glow for depth */}
           <div className="fixed top-0 right-0 w-[800px] h-[800px] bg-gradient-to-b from-[#00F0FF]/5 to-transparent rounded-full blur-[150px] -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
           
@@ -460,6 +480,59 @@ export default function DashboardLayout() {
           </div>
         </main>
       </div>
+
+      {/* Mobile Drawer (Visible when hamburger clicked on mobile/narrow windows) */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex animate-in fade-in duration-200">
+          <div 
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <aside className="relative w-72 max-w-[85vw] bg-[#0A0F1F] border-r border-gray-800 flex flex-col justify-between h-full z-10 p-4 overflow-y-auto shadow-2xl">
+            <div>
+              <div className="h-12 flex items-center justify-between px-2 mb-4 border-b border-gray-800 pb-2">
+                <span className="text-xl font-bold tracking-wider text-[#00F0FF]">ORBITAL-X</span>
+                <button 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1 text-gray-400 hover:text-white rounded border border-gray-800"
+                  aria-label="Close navigation"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <nav className="space-y-1">
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.name}
+                    to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center px-3.5 py-2.5 rounded font-mono text-sm tracking-wider transition-colors ${
+                        isActive
+                          ? 'bg-gradient-to-r from-[#00F0FF]/20 to-transparent text-[#00F0FF] border-l-2 border-[#00F0FF]'
+                          : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
+                      }`
+                    }
+                  >
+                    <span className="mr-3">{item.icon}</span>
+                    {item.name}
+                  </NavLink>
+                ))}
+              </nav>
+            </div>
+            
+            <div className="pt-4 border-t border-gray-800 space-y-2">
+              <NavLink 
+                to="/settings" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center px-3.5 py-2 text-gray-400 hover:text-white font-mono text-xs tracking-wider"
+              >
+                <Settings size={14} className="mr-3" /> Settings
+              </NavLink>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

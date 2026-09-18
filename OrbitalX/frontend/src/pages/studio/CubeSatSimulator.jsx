@@ -29,8 +29,11 @@ import {
   ChevronRight,
   ChevronLeft,
   SlidersHorizontal,
-  RefreshCw
+  RefreshCw,
+  LayoutDashboard,
+  ArrowLeft
 } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 import CubeSatSimulationCanvas from './CubeSatSimulationCanvas';
 import CubeSatGlobeView from './CubeSatGlobeView';
 import cubesatSimService from '../../services/cubesatSimService';
@@ -46,7 +49,6 @@ export default function CubeSatSimulator() {
   const [viewportMode, setViewportMode] = useState('EARTH_ORBIT'); // 'EARTH_ORBIT' | 'CLOSEUP'
   const [groundStations, setGroundStations] = useState([]);
   const [warpSpeed, setWarpSpeed] = useState(15);
-  const [liveCoords, setLiveCoords] = useState(null);
   
   // Cold-gas thrust burst cycle: 'READY' | 'FIRING' | 'COOLDOWN'
   const [burstCycle, setBurstCycle] = useState('READY');
@@ -325,6 +327,50 @@ export default function CubeSatSimulator() {
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-300">
       
+      {/* --- QUICK NAVIGATION BAR & BREADCRUMBS --- */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-gray-800/80">
+        <div className="flex items-center space-x-2 text-xs font-mono text-gray-400">
+          <NavLink to="/dashboard" className="hover:text-[#00F0FF] flex items-center transition-colors">
+            <LayoutDashboard size={13} className="mr-1 text-[#00F0FF]" />
+            <span>OVERVIEW</span>
+          </NavLink>
+          <ChevronRight size={12} className="text-gray-600" />
+          <NavLink to="/orbit" className="hover:text-[#00F0FF] flex items-center transition-colors">
+            <Globe2 size={13} className="mr-1 text-[#00FF66]" />
+            <span>ORBITAL VIEWER</span>
+          </NavLink>
+          <ChevronRight size={12} className="text-gray-600" />
+          <NavLink to="/studio" className="hover:text-[#00F0FF] flex items-center transition-colors">
+            <Box size={13} className="mr-1 text-purple-400" />
+            <span>3D STUDIO</span>
+          </NavLink>
+          <ChevronRight size={12} className="text-gray-600" />
+          <span className="text-[#00F0FF] font-bold">CUBESAT SIMULATOR</span>
+        </div>
+
+        <div className="flex items-center space-x-2 text-xs font-mono">
+          <NavLink
+            to="/dashboard"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#121C36] hover:bg-[#1a2950] border border-gray-700 hover:border-[#00F0FF]/50 text-gray-300 hover:text-white rounded transition-all font-semibold"
+          >
+            <ArrowLeft size={13} className="text-[#00F0FF]" />
+            <span>EXIT SIMULATOR</span>
+          </NavLink>
+          <NavLink
+            to="/satellites"
+            className="flex items-center space-x-1 px-3 py-1.5 bg-[#121C36] hover:bg-[#1a2950] border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white rounded transition-all"
+          >
+            <span>SATELLITES</span>
+          </NavLink>
+          <NavLink
+            to="/telemetry"
+            className="flex items-center space-x-1 px-3 py-1.5 bg-[#121C36] hover:bg-[#1a2950] border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white rounded transition-all"
+          >
+            <span>TELEMETRY</span>
+          </NavLink>
+        </div>
+      </div>
+
       {/* --- 1. TOP HEADER & CUBESAT SWITCHER --- */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-gray-800 pb-5 gap-4">
         <div>
@@ -572,7 +618,6 @@ export default function CubeSatSimulator() {
                 groundStations={groundStations}
                 warpSpeed={warpSpeed}
                 setWarpSpeed={setWarpSpeed}
-                onTelemetryUpdate={(pos) => setLiveCoords(pos)}
               />
             ) : (
               <>

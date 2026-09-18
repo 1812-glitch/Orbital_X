@@ -102,16 +102,19 @@ export default function CubeSatGlobeView({
     return { currentLat: lat, currentLng: lng, orbitHeading: heading };
   }, [simTime, satId, inclination]);
 
-  // Push live position back to parent if callback provided
+  const onTelemetryUpdateRef = useRef(onTelemetryUpdate);
+  onTelemetryUpdateRef.current = onTelemetryUpdate;
+
+  // Push live position back to parent if callback provided (guarded against re-render loops)
   useEffect(() => {
-    if (onTelemetryUpdate) {
-      onTelemetryUpdate({
+    if (typeof onTelemetryUpdateRef.current === 'function') {
+      onTelemetryUpdateRef.current({
         lat: currentLat,
         lng: currentLng,
         alt: visualAlt
       });
     }
-  }, [currentLat, currentLng, visualAlt, onTelemetryUpdate]);
+  }, [currentLat, currentLng, visualAlt]);
 
   // Camera tracking: follow CubeSat as it orbits
   useEffect(() => {
