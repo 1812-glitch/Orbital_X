@@ -11,6 +11,11 @@ const alertService = {
     return response.data;
   },
 
+  create: async (data) => {
+    const response = await apiClient.post('/alerts', data);
+    return response.data;
+  },
+
   updateStatus: async (id, action) => {
     const response = await apiClient.put(`/alerts/${id}/status`, { action });
     return response.data;
@@ -18,3 +23,4 @@ const alertService = {
 };
 
 export default alertService;
+

@@ -81,7 +81,6 @@ exports.updateAlertStatus = async (req, res) => {
       .populate('satelliteId', 'name satelliteId')
       .populate('acknowledgedBy', 'name email');
 
-    // Here we would ideally emit a socket event to update clients
     const io = req.app.get('io');
     if (io) {
       io.emit('alert:updated', updatedAlert);
@@ -93,3 +92,27 @@ exports.updateAlertStatus = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server Error' });
   }
 };
+
+// @desc    Create a new alert (e.g., simulated anomaly)
+// @route   POST /api/alerts
+// @access  Private
+exports.createAlert = async (req, res) => {
+  try {
+    const alert = await Alert.create(req.body);
+    const populated = await Alert.findById(alert._id)
+      .populate('satelliteId', 'name satelliteId')
+      .populate('acknowledgedBy', 'name email');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('alert:new', populated);
+    }
+
+    res.status(201).json({ success: true, data: populated });
+  } catch (error) {
+    console.error('Error creating alert:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+
