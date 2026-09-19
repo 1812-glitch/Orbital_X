@@ -540,42 +540,25 @@ export default function CubeSatCanvas({
         </div>
       )}
 
-      {/* Viewport Overlay Controls Header */}
-      <div className="absolute top-4 left-4 flex items-center space-x-3 pointer-events-auto">
-        <div className="bg-[#0A0F1F]/90 border border-gray-800 backdrop-blur-md px-3 py-1.5 rounded flex items-center space-x-2">
-          <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse"></div>
-          <span className="font-mono text-[11px] tracking-widest text-white uppercase font-bold">3D VIEWPORT</span>
-        </div>
-        <div className="bg-[#0A0F1F]/90 border border-gray-800 px-2.5 py-1.5 rounded font-mono text-[11px] text-[#00F0FF] font-bold">
-          {formFactor}
-        </div>
-      </div>
-
-      {/* Assembly / Validation Toast */}
+      {/* Assembly / Validation Toast (Centered Sub-Toolbar Pill) */}
       {isAssembling && (
-        <div className="absolute top-4 right-4 bg-[#00F0FF]/10 border border-[#00F0FF] px-4 py-2 rounded font-mono text-xs text-[#00F0FF] tracking-wider animate-pulse flex items-center space-x-2">
-          <span>⚙ ASSEMBLE EXPLODED VIEW</span>
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 bg-[#00F0FF]/15 border border-[#00F0FF] backdrop-blur-md px-4 py-1.5 rounded-full font-mono text-xs text-[#00F0FF] tracking-wider animate-pulse flex items-center space-x-2 shadow-lg shadow-[#00F0FF]/20 pointer-events-none">
+          <span>⚙ ASSEMBLE EXPLODED VIEW ACTIVE</span>
         </div>
       )}
       {isValidating && (
-        <div className="absolute top-4 right-4 bg-[#10B981]/10 border border-[#10B981] px-4 py-2 rounded font-mono text-xs text-[#10B981] tracking-wider animate-pulse flex items-center space-x-2">
-          <span>⚡ FEASIBILITY TELEMETRY SCANNING...</span>
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 bg-[#10B981]/15 border border-[#10B981] backdrop-blur-md px-4 py-1.5 rounded-full font-mono text-xs text-[#10B981] tracking-wider animate-pulse flex items-center space-x-2 shadow-lg shadow-[#10B981]/20 pointer-events-none">
+          <span>⚡ TELEMETRY FEASIBILITY SCANNING...</span>
         </div>
       )}
 
-      {/* Bottom Controls Guidance Footer */}
-      <div className="absolute bottom-3 left-4 right-4 flex justify-between items-center text-[10px] font-mono text-gray-500 pointer-events-none">
-        <div>
-          <span>✛ Drag to rotate</span>
-          <span className="mx-2">•</span>
-          <span>Scroll to zoom</span>
-          <span className="mx-2">•</span>
-          <span>Right-click to pan</span>
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <div className={`w-1.5 h-1.5 rounded-full ${totalMounted > 0 ? 'bg-[#00FF66]' : 'bg-gray-600'}`}></div>
-          <span className="text-gray-400">{totalMounted} parts mounted</span>
-        </div>
+      {/* Subtle Controls Guidance (Non-interfering) */}
+      <div className="absolute bottom-14 left-6 hidden lg:flex items-center space-x-3 text-[10px] font-mono text-gray-500/70 pointer-events-none z-10">
+        <span>✛ Drag: Rotate</span>
+        <span>•</span>
+        <span>Scroll: Zoom</span>
+        <span>•</span>
+        <span>Right-click: Pan</span>
       </div>
     </div>
   );
