@@ -611,18 +611,25 @@ export default function DashboardLayout() {
         <main className={`flex-1 relative ${
           ['/studio', '/cubesat-sim', '/orbit'].includes(location.pathname)
             ? 'overflow-hidden p-0'
+            : location.pathname === '/communications'
+            ? 'overflow-y-auto p-2 sm:p-3 md:p-4'
             : 'overflow-y-auto p-4 sm:p-6 lg:p-8'
         }`}>
           {/* Subtle background glow for depth */}
           <div className="fixed top-0 right-0 w-[800px] h-[800px] bg-gradient-to-b from-[#00F0FF]/5 to-transparent rounded-full blur-[150px] -translate-y-1/2 translate-x-1/3 pointer-events-none z-0"></div>
           
           <div className={`relative z-10 mx-auto ${
-            ['/studio', '/cubesat-sim', '/orbit'].includes(location.pathname) ? 'h-full w-full max-w-full' : 'max-w-[1400px]'
+            ['/studio', '/cubesat-sim', '/orbit'].includes(location.pathname) 
+              ? 'h-full w-full max-w-full' 
+              : location.pathname === '/communications'
+              ? 'w-full max-w-none'
+              : 'max-w-[1400px]'
           }`}>
             <Outlet />
           </div>
         </main>
       </div>
+
 
       {/* Mobile Drawer (Visible when hamburger clicked on mobile/narrow windows) */}
       {mobileMenuOpen && (

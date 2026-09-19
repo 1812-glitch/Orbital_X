@@ -8,10 +8,19 @@ import {
   Eye,
   Satellite,
   ChevronDown,
+  ChevronUp,
   Check,
   Radio,
   Wifi,
-  Sparkles
+  Sparkles,
+  X,
+  Maximize2,
+  Minimize2,
+  PanelRightClose,
+  PanelRightOpen,
+  Trash2,
+  Activity,
+  FileText
 } from 'lucide-react';
 import satelliteService from '../../services/satelliteService';
 import { useSatellite } from '../../context/SatelliteContext';
@@ -28,7 +37,14 @@ export default function Communications() {
   const [eventLogs, setEventLogs] = useState([]);
   const [currentTime, setCurrentTime] = useState(new Date().toUTCString().slice(17, 25));
   const [sending, setSending] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
   const terminalBottomRef = useRef(null);
+
+  // Closable panels state
+  const [showMetricsSidebar, setShowMetricsSidebar] = useState(false); // Closed by default so terminal has maximum width
+  const [showEventLog, setShowEventLog] = useState(false); // Closed/minimized by default so terminal has maximum height
+  const [isEventLogMinimized, setIsEventLogMinimized] = useState(false);
+  const [isTerminalMaximized, setIsTerminalMaximized] = useState(false);
 
   // Dropdown states for CubeSat / Satellite Selection
   const [isSatDropdownOpen, setIsSatDropdownOpen] = useState(false);
@@ -80,7 +96,7 @@ export default function Communications() {
     }
   }, [selectedSatellite, satellites]);
 
-  // Default Seed Messages matching Live Comunications.png
+  // Default Seed Messages
   useEffect(() => {
     setMessages([
       { type: 'system', text: `--- ENCRYPTED COMM SESSION INITIATED AT ${new Date(Date.now() - 15 * 60000).toUTCString().slice(17, 25)} UTC ---` },
@@ -108,10 +124,12 @@ export default function Communications() {
     ]);
   }, []);
 
-  // Scroll terminal
+  // Auto scroll terminal
   useEffect(() => {
-    terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (autoScroll) {
+      terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, autoScroll]);
 
   const handleSendCommand = (e) => {
     e.preventDefault();
@@ -169,6 +187,12 @@ export default function Communications() {
     }, 1200);
   };
 
+  const handleClearBuffer = () => {
+    setMessages([
+      { type: 'system', text: `--- TERMINAL BUFFER CLEARED AT ${new Date().toUTCString().slice(17, 25)} UTC ---` }
+    ]);
+  };
+
   const handleExportLog = () => {
     const csvContent = "data:text/csv;charset=utf-8," + 
       ["Timestamp,Level,Source,Message",
@@ -219,24 +243,34 @@ export default function Communications() {
   });
 
   return (
-    <div className="space-y-6 max-w-[1440px] mx-auto animate-in fade-in duration-500 font-sans pb-10">
+    <div className={`w-full h-full font-sans space-y-4 pb-6 transition-all ${
+      isTerminalMaximized ? 'fixed inset-0 z-50 bg-[#050810] p-4 overflow-y-auto' : ''
+    }`}>
       
-      {/* 1. TOP HEADER WITH TABS & LIVE SYSTEM CLOCK */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-800 pb-4 gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-mono font-bold text-white tracking-widest uppercase flex items-center space-x-3">
+      {/* 1. ULTRA-WIDE TOP HEADER WITH SYSTEM CONTROLS & SIDEBAR TOGGLE BUTTONS */}
+      <div className="w-full flex flex-col xl:flex-row xl:items-center justify-between border-b border-gray-800 pb-3 gap-3">
+        
+        {/* Left: Brand + Active Target */}
+        <div className="flex items-center space-x-3">
+          <h1 className="text-xl font-mono font-bold text-white tracking-widest uppercase flex items-center space-x-2">
             <span className="text-[#00F0FF]">ORBITAL-X</span>
-            <span>MISSION CONTROL</span>
+            <span className="hidden sm:inline">COMMUNICATIONS</span>
           </h1>
+          
+          <div className="flex items-center space-x-2 bg-[#121C36] px-2.5 py-1 rounded border border-[#00F0FF]/30 font-mono text-xs">
+            <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-pulse"></span>
+            <span className="text-white font-bold">{currentSat.satelliteId}</span>
+            <span className="text-gray-400">({currentSat.name || 'ACTIVE'})</span>
+          </div>
         </div>
 
-        {/* Center Tabs: LIVE FEED | COMMAND | ARCHIVE */}
-        <div className="flex items-center bg-[#12192b] border border-gray-800 rounded p-1 font-mono text-xs font-bold">
+        {/* Center: Comm Tabs */}
+        <div className="flex items-center bg-[#12192b] border border-gray-800 rounded p-1 font-mono text-xs font-bold self-start xl:self-auto">
           {['LIVE FEED', 'COMMAND', 'ARCHIVE'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 rounded transition-all ${
+              className={`px-4 py-1 rounded transition-all ${
                 activeTab === tab 
                   ? 'bg-[#00F0FF] text-[#0A0F1F] shadow-sm' 
                   : 'text-gray-400 hover:text-white'
@@ -247,74 +281,112 @@ export default function Communications() {
           ))}
         </div>
 
-        {/* Search Parameters & System State */}
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-2.5 text-gray-500" />
+        {/* Right: Search, Clock & Closable Sidebar Toggle Buttons */}
+        <div className="flex flex-wrap items-center gap-2.5 font-mono text-xs">
+          
+          {/* Quick Search */}
+          <div className="relative hidden md:block w-48">
+            <Search size={12} className="absolute left-2.5 top-2 text-gray-500" />
             <input 
               type="text"
               placeholder="Search parameters..."
               value={searchParam}
               onChange={(e) => setSearchParam(e.target.value)}
-              className="bg-[#12192b] border border-gray-800 rounded pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 font-mono"
+              className="w-full bg-[#12192b] border border-gray-800 rounded pl-7 pr-2.5 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50"
             />
           </div>
 
-          <div className="flex items-center space-x-3 font-mono text-xs text-gray-400">
-            <span className="w-2 h-2 rounded-full bg-[#00FF66] shadow-[0_0_8px_#00FF66]"></span>
-            <span>SYSTEM ACTIVE</span>
-            <span className="text-gray-600">|</span>
+          {/* UTC Clock */}
+          <div className="hidden sm:flex items-center space-x-2 px-2.5 py-1 rounded bg-[#0A0F1F] border border-gray-800 text-gray-400 text-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66]"></span>
             <span className="text-white font-bold">{currentTime} UTC</span>
           </div>
+
+          {/* TOGGLE BUTTON: METRICS SIDEBAR */}
+          <button
+            id="toggle-metrics-sidebar-btn"
+            onClick={() => setShowMetricsSidebar(!showMetricsSidebar)}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded border transition-all font-bold ${
+              showMetricsSidebar 
+                ? 'bg-[#00F0FF] text-[#0A0F1F] border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.3)]' 
+                : 'bg-[#121C36] text-gray-300 border-gray-700 hover:border-[#00F0FF] hover:text-white'
+            }`}
+            title={showMetricsSidebar ? "Hide Metrics Sidebar to Maximize Terminal" : "Show Communication Metrics Sidebar"}
+          >
+            {showMetricsSidebar ? <PanelRightClose size={13} /> : <PanelRightOpen size={13} />}
+            <span>METRICS SIDEBAR</span>
+            <span className={`text-[9px] px-1 rounded ${showMetricsSidebar ? 'bg-[#0A0F1F] text-[#00F0FF]' : 'bg-gray-800 text-gray-400'}`}>
+              {showMetricsSidebar ? 'OPEN' : 'CLOSED'}
+            </span>
+          </button>
+
+          {/* TOGGLE BUTTON: EVENT LOG */}
+          <button
+            id="toggle-event-log-btn"
+            onClick={() => setShowEventLog(!showEventLog)}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded border transition-all font-bold ${
+              showEventLog 
+                ? 'bg-[#121C36] text-[#00F0FF] border-[#00F0FF]/60 shadow-sm' 
+                : 'bg-[#0A0F1F] text-gray-400 border-gray-800 hover:border-gray-700 hover:text-gray-200'
+            }`}
+            title={showEventLog ? "Hide Communication Event Log" : "Show Communication Event Log"}
+          >
+            <FileText size={13} />
+            <span>EVENT LOG</span>
+            <span className="text-[9px] px-1 rounded bg-gray-800 text-gray-300">
+              {eventLogs.length}
+            </span>
+          </button>
+
         </div>
       </div>
 
-      {/* 2. EXPANDED TWO-PANE CONSOLE: MAIN EXPANDED LIVE TERMINAL (8 COLS) + COMM METRICS (4 COLS) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[560px]">
+      {/* 2. MAIN TERMINAL WORKSPACE (EXPANDS TO 100% WIDTH WHEN SIDEBAR IS CLOSED) */}
+      <div className="w-full grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         
-        {/* Main Expanded Terminal Session (8 cols) with CubeSat Dropdown Menu */}
-        <div className="lg:col-span-8 bg-[#070B14] border border-gray-800 rounded-lg flex flex-col shadow-2xl relative overflow-hidden">
+        {/* MAIN TERMINAL CONSOLE: 12 COLS WHEN SIDEBAR CLOSED, 9 COLS WHEN OPEN */}
+        <div className={`${
+          showMetricsSidebar ? 'xl:col-span-9' : 'xl:col-span-12'
+        } w-full bg-[#070B14] border border-gray-800 rounded-lg flex flex-col shadow-2xl relative overflow-hidden transition-all duration-300`}>
           
-          {/* Terminal Session Header with Rich CubeSat Dropdown Selector */}
-          <div className="p-3.5 sm:p-4 border-b border-gray-800 flex flex-wrap items-center justify-between bg-[#0A0F1F] gap-3 relative z-30">
+          {/* Terminal Session Header */}
+          <div className="p-3 sm:p-3.5 border-b border-gray-800 flex flex-wrap items-center justify-between bg-[#0A0F1F] gap-3 relative z-30">
             
             {/* Left: CubeSat / Satellite Dropdown Menu */}
-            <div className="relative" ref={satDropdownRef}>
-              <div className="flex items-center space-x-2">
-                <span className="font-mono text-[10px] text-gray-400 uppercase tracking-widest hidden sm:inline-block">
-                  TARGET ASSET:
-                </span>
+            <div className="relative flex items-center space-x-2" ref={satDropdownRef}>
+              <span className="font-mono text-[10px] text-gray-400 uppercase tracking-widest hidden sm:inline-block">
+                TARGET ASSET:
+              </span>
 
-                <button
-                  id="cubesat-selector-dropdown-btn"
-                  onClick={() => setIsSatDropdownOpen(!isSatDropdownOpen)}
-                  className={`flex items-center space-x-3 px-3 py-1.5 rounded bg-[#121C36] hover:bg-[#182547] border transition-all text-left shadow-sm ${
-                    isSatDropdownOpen ? 'border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.25)]' : 'border-[#00F0FF]/40 hover:border-[#00F0FF]'
-                  }`}
-                >
-                  <div className="w-6 h-6 rounded bg-[#00F0FF]/15 border border-[#00F0FF]/30 flex items-center justify-center shrink-0">
-                    <Satellite size={14} className="text-[#00F0FF]" />
-                  </div>
+              <button
+                id="cubesat-selector-dropdown-btn"
+                onClick={() => setIsSatDropdownOpen(!isSatDropdownOpen)}
+                className={`flex items-center space-x-3 px-3 py-1.5 rounded bg-[#121C36] hover:bg-[#182547] border transition-all text-left shadow-sm ${
+                  isSatDropdownOpen ? 'border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.25)]' : 'border-[#00F0FF]/40 hover:border-[#00F0FF]'
+                }`}
+              >
+                <div className="w-6 h-6 rounded bg-[#00F0FF]/15 border border-[#00F0FF]/30 flex items-center justify-center shrink-0">
+                  <Satellite size={14} className="text-[#00F0FF]" />
+                </div>
 
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono text-xs font-bold text-white tracking-wider uppercase">
-                        {currentSat.satelliteId} {currentSat.name ? `/ ${currentSat.name}` : ''}
-                      </span>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40">
-                        {currentSat.type || 'CubeSat'}
-                      </span>
-                    </div>
-                    <span className="font-mono text-[10px] text-gray-400 block leading-tight">
-                      {currentSat.orbitType || 'LEO-POLAR'} • <span className={currentSat.status === 'WARNING' ? 'text-[#FFB020]' : currentSat.status === 'OFFLINE' ? 'text-gray-500' : 'text-[#00FF66]'}>
-                        {currentSat.status === 'OFFLINE' ? 'LOS (OFFLINE)' : currentSat.status === 'WARNING' ? 'WARNING' : 'UPLINK NOMINAL'}
-                      </span>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-mono text-xs font-bold text-white tracking-wider uppercase">
+                      {currentSat.satelliteId} {currentSat.name ? `/ ${currentSat.name}` : ''}
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40">
+                      {currentSat.type || 'CubeSat'}
                     </span>
                   </div>
+                  <span className="font-mono text-[10px] text-gray-400 block leading-tight">
+                    {currentSat.orbitType || 'LEO-POLAR'} • <span className={currentSat.status === 'WARNING' ? 'text-[#FFB020]' : currentSat.status === 'OFFLINE' ? 'text-gray-500' : 'text-[#00FF66]'}>
+                      {currentSat.status === 'OFFLINE' ? 'LOS (OFFLINE)' : currentSat.status === 'WARNING' ? 'WARNING' : 'UPLINK NOMINAL'}
+                    </span>
+                  </span>
+                </div>
 
-                  <ChevronDown size={14} className={`text-gray-400 group-hover:text-[#00F0FF] transition-transform duration-200 ml-1 ${isSatDropdownOpen ? 'rotate-180 text-[#00F0FF]' : ''}`} />
-                </button>
-              </div>
+                <ChevronDown size={14} className={`text-gray-400 group-hover:text-[#00F0FF] transition-transform duration-200 ml-1 ${isSatDropdownOpen ? 'rotate-180 text-[#00F0FF]' : ''}`} />
+              </button>
 
               {/* DROPDOWN MENU POPUP */}
               {isSatDropdownOpen && (
@@ -453,28 +525,57 @@ export default function Communications() {
               )}
             </div>
 
-            {/* Right Header: Specs Quick Action & Uplink Badge */}
-            <div className="flex items-center space-x-2">
+            {/* Right Header Controls: Inspect Specs, Buffer Clear, Auto-scroll, Maximize */}
+            <div className="flex items-center space-x-2 font-mono text-xs">
+              
               <button
                 id="comm-inspect-specs-btn"
                 onClick={() => openDetailModal(currentSat)}
-                className="px-2.5 py-1.5 rounded bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] font-mono text-[10px] font-bold tracking-widest uppercase flex items-center space-x-1.5 transition-colors shadow-sm"
+                className="px-2.5 py-1.5 rounded bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] text-[10px] font-bold tracking-widest uppercase flex items-center space-x-1.5 transition-colors shadow-sm"
                 title="Inspect Satellite Details"
               >
                 <Eye size={12} />
-                <span>INSPECT SPECS</span>
+                <span className="hidden sm:inline">SPECS</span>
               </button>
 
-              <span className="px-2.5 py-1.5 rounded bg-[#00FF66]/10 border border-[#00FF66]/30 text-[#00FF66] font-mono text-[10px] font-bold tracking-widest uppercase flex items-center space-x-1.5 shadow-[0_0_10px_rgba(0,255,102,0.1)]">
+              <button
+                onClick={handleClearBuffer}
+                className="p-1.5 text-gray-400 hover:text-[#FF2A2A] hover:bg-[#FF2A2A]/10 rounded border border-transparent hover:border-[#FF2A2A]/30 transition-colors"
+                title="Clear Terminal Buffer"
+              >
+                <Trash2 size={13} />
+              </button>
+
+              <button
+                onClick={() => setAutoScroll(!autoScroll)}
+                className={`px-2 py-1 rounded text-[10px] border transition-colors ${
+                  autoScroll ? 'bg-[#00FF66]/15 text-[#00FF66] border-[#00FF66]/30' : 'bg-gray-800 text-gray-500 border-gray-700'
+                }`}
+                title="Toggle Auto-Scroll"
+              >
+                AUTO-SCROLL: {autoScroll ? 'ON' : 'OFF'}
+              </button>
+
+              <button
+                onClick={() => setIsTerminalMaximized(!isTerminalMaximized)}
+                className="p-1.5 text-gray-400 hover:text-[#00F0FF] hover:bg-[#00F0FF]/10 rounded border border-gray-800 hover:border-[#00F0FF]/30 transition-colors"
+                title={isTerminalMaximized ? "Restore Terminal" : "Maximize Terminal"}
+              >
+                {isTerminalMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              </button>
+
+              <span className="px-2 py-1 rounded bg-[#00FF66]/10 border border-[#00FF66]/30 text-[#00FF66] text-[10px] font-bold tracking-widest uppercase flex items-center space-x-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-pulse"></span>
-                <span>SECURE LINK</span>
+                <span className="hidden sm:inline">LINK ACTIVE</span>
               </span>
             </div>
 
           </div>
 
-          {/* Terminal Messages Scroll Content - SIGNIFICANTLY INCREASED AREA */}
-          <div className="flex-1 p-5 sm:p-6 overflow-y-auto font-mono text-xs space-y-4 min-h-[480px] max-h-[580px] bg-[#050912]">
+          {/* Terminal Messages Scroll Content - MAXIMUM AREA & FULL EXTENSION */}
+          <div className={`flex-1 p-5 sm:p-6 overflow-y-auto font-mono text-xs space-y-4 bg-[#050912] ${
+            isTerminalMaximized ? 'min-h-[70vh]' : showMetricsSidebar ? 'min-h-[540px]' : 'min-h-[620px]'
+          }`}>
             {messages.map((m, idx) => {
               if (m.type === 'system') {
                 return (
@@ -490,7 +591,7 @@ export default function Communications() {
                     <span className="text-gray-400 text-[10px] block">
                       {m.sender} [{m.time}]
                     </span>
-                    <div className="p-3.5 rounded bg-[#121C36] border border-[#00F0FF]/30 text-[#00F0FF] whitespace-pre-wrap shadow-md">
+                    <div className="p-3.5 rounded bg-[#121C36] border border-[#00F0FF]/30 text-[#00F0FF] whitespace-pre-wrap shadow-md leading-relaxed">
                       {m.text}
                     </div>
                   </div>
@@ -502,7 +603,7 @@ export default function Communications() {
                   <span className="text-[#00FF66] text-[10px] block text-right">
                     [{m.time}] {m.sender}
                   </span>
-                  <div className="p-3.5 rounded bg-[#0A1628] border border-gray-700 text-gray-200 whitespace-pre-wrap shadow-md">
+                  <div className="p-3.5 rounded bg-[#0A1628] border border-gray-700 text-gray-200 whitespace-pre-wrap shadow-md leading-relaxed">
                     {m.text}
                   </div>
                 </div>
@@ -518,7 +619,7 @@ export default function Communications() {
             <select
               value={commandPriority}
               onChange={(e) => setCommandPriority(e.target.value)}
-              className="bg-[#12192b] border border-gray-800 text-gray-300 font-mono text-xs rounded px-2.5 py-2.5 focus:outline-none focus:border-[#00F0FF]/50 uppercase cursor-pointer"
+              className="bg-[#12192b] border border-gray-800 text-gray-300 font-mono text-xs rounded px-2.5 py-2.5 focus:outline-none focus:border-[#00F0FF]/50 uppercase cursor-pointer shrink-0"
             >
               <option value="NORMAL">NORMAL ▼</option>
               <option value="HIGH">HIGH</option>
@@ -528,7 +629,7 @@ export default function Communications() {
             {/* Input field */}
             <input 
               type="text"
-              placeholder={`Enter command for ${currentSat.satelliteId || 'target'} (e.g. EXEC ADCS_CALIBRATE, DUMP_LOGS)...`}
+              placeholder={`Enter uplink command for ${currentSat.satelliteId || 'target'} (e.g. EXEC ADCS_CALIBRATE, DUMP_LOGS)...`}
               value={commandText}
               onChange={(e) => setCommandText(e.target.value)}
               className="flex-1 bg-[#12192b] border border-gray-800 rounded px-3.5 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 font-mono"
@@ -538,7 +639,7 @@ export default function Communications() {
             <button
               type="submit"
               disabled={sending || !commandText.trim()}
-              className="px-5 py-2.5 bg-[#00F0FF] hover:bg-[#82E6E6] text-[#0A0F1F] rounded font-mono text-xs font-bold uppercase transition-all shadow-[0_0_15px_rgba(0,240,255,0.2)] disabled:opacity-40 flex items-center space-x-1.5"
+              className="px-5 py-2.5 bg-[#00F0FF] hover:bg-[#82E6E6] text-[#0A0F1F] rounded font-mono text-xs font-bold uppercase transition-all shadow-[0_0_15px_rgba(0,240,255,0.2)] disabled:opacity-40 flex items-center space-x-1.5 shrink-0"
             >
               <Send size={13} />
               <span className="hidden sm:inline">DISPATCH</span>
@@ -547,154 +648,197 @@ export default function Communications() {
 
         </div>
 
-        {/* Right Pane (4 cols): COMMUNICATION METRICS & ACTIVE LINK SPECS */}
-        <div className="lg:col-span-4 bg-[#0A0F1F] border border-gray-800 rounded-lg p-5 flex flex-col justify-between shadow-xl space-y-6">
+        {/* CLOSABLE RIGHT SIDEBAR: COMMUNICATION METRICS & LINK SPECS */}
+        {showMetricsSidebar && (
+          <div className="xl:col-span-3 w-full bg-[#0A0F1F] border border-gray-800 rounded-lg p-4 flex flex-col justify-between shadow-xl space-y-4 animate-in fade-in slide-in-from-right duration-200">
+            
+            <div>
+              {/* Sidebar Header with Close Button */}
+              <div className="flex items-center justify-between pb-2 mb-3 border-b border-gray-800">
+                <div className="flex items-center space-x-2">
+                  <Activity size={14} className="text-[#00F0FF]" />
+                  <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+                    COMM METRICS
+                  </h3>
+                </div>
+                
+                {/* ✕ Close Sidebar Button */}
+                <button
+                  onClick={() => setShowMetricsSidebar(false)}
+                  className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
+                  title="Close Metrics Sidebar (Maximize Terminal)"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Selected Target Quick Overview Card */}
+              <div className="bg-[#12192b]/70 border border-gray-800 rounded p-3 mb-4 font-mono">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider">TARGET IN FOCUS</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30">
+                    ONLINE
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-white mb-1">
+                  {currentSat.satelliteId} - {currentSat.name}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-400 pt-2 border-t border-gray-800/80">
+                  <div>
+                    <span className="text-gray-500 block">TYPE</span>
+                    <span className="text-gray-200">{currentSat.type || 'CubeSat 3U'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">ORBIT</span>
+                    <span className="text-[#00F0FF]">{currentSat.orbitType || 'LEO-POLAR'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Signal Strength & Latency Grid */}
+              <div className="grid grid-cols-2 gap-2.5 mb-4">
+                
+                {/* Signal Strength */}
+                <div className="bg-[#121C36]/70 border border-gray-800 rounded p-2.5 font-mono">
+                  <span className="text-[9px] text-gray-500 uppercase tracking-widest block mb-1">
+                    SIGNAL STR
+                  </span>
+                  <div className="text-lg font-bold text-white mb-1.5">
+                    -62 <span className="text-xs font-normal text-gray-400">dBm</span>
+                  </div>
+                  {/* 5-bar signal strength meter */}
+                  <div className="flex items-end space-x-1 h-3">
+                    <span className="w-1.5 h-1 bg-[#00F0FF] rounded-xs"></span>
+                    <span className="w-1.5 h-1.5 bg-[#00F0FF] rounded-xs"></span>
+                    <span className="w-1.5 h-2 bg-[#00F0FF] rounded-xs"></span>
+                    <span className="w-1.5 h-2.5 bg-[#00F0FF] rounded-xs"></span>
+                    <span className="w-1.5 h-3 bg-[#00F0FF] rounded-xs"></span>
+                  </div>
+                </div>
+
+                {/* Latency */}
+                <div className="bg-[#121C36]/70 border border-gray-800 rounded p-2.5 font-mono">
+                  <span className="text-[9px] text-gray-500 uppercase tracking-widest block mb-1">
+                    LATENCY
+                  </span>
+                  <div className="text-lg font-bold text-white mb-1.5">
+                    124 <span className="text-xs font-normal text-gray-400">ms</span>
+                  </div>
+                  <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-[#00FF66] h-full w-[35%]"></div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Link Parameters Table */}
+              <div className="space-y-2 font-mono text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-800/60">
+                  <span className="text-gray-500">Link Status</span>
+                  <span className="text-[#00FF66] font-bold">CONNECTED</span>
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-b border-gray-800/60">
+                  <span className="text-gray-500">Last Contact</span>
+                  <span className="text-white">14:22:05 UTC</span>
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-b border-gray-800/60">
+                  <span className="text-gray-500">Ground Station</span>
+                  <span className="text-[#00F0FF] font-bold">GS-001 INDIA</span>
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-b border-gray-800/60">
+                  <span className="text-gray-500">Protocol</span>
+                  <span className="text-gray-300">S-BAND XFER</span>
+                </div>
+
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-gray-500">Encryption</span>
+                  <span className="text-[#00FF66] font-bold flex items-center space-x-1">
+                    <ShieldCheck size={12} />
+                    <span>AES-256</span>
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Quick Frequency Uplink Indicator */}
+            <div className="p-2.5 rounded bg-[#0A1628] border border-gray-800 text-[10px] font-mono text-gray-400 flex items-center justify-between mt-2">
+              <span>UPLINK FREQ: 2025.5 MHz</span>
+              <span className="text-[#00F0FF] font-bold">LOCKED</span>
+            </div>
+
+          </div>
+        )}
+
+      </div>
+
+      {/* 3. CLOSABLE / MINIMIZABLE BOTTOM EVENT LOG */}
+      {showEventLog && (
+        <div className="w-full bg-[#0A0F1F] border border-gray-800 rounded-lg overflow-hidden shadow-xl animate-in fade-in duration-200">
           
-          <div>
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-800">
-              <h3 className="font-mono text-xs font-bold text-gray-400 uppercase tracking-widest">
-                COMMUNICATION METRICS
+          {/* Log Header with Controls */}
+          <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between bg-[#070C18]">
+            <div className="flex items-center space-x-3 font-mono">
+              <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center space-x-2">
+                <FileText size={13} className="text-[#00F0FF]" />
+                <span>COMMUNICATION EVENT LOG</span>
               </h3>
-              <span className="text-[10px] font-mono text-[#00F0FF]">LIVE DUPLEX</span>
-            </div>
-
-            {/* Selected Target Quick Overview Card */}
-            <div className="bg-[#12192b]/70 border border-gray-800 rounded p-3.5 mb-5 font-mono">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] text-gray-400 uppercase tracking-wider">TARGET IN FOCUS</span>
-                <span className="px-2 py-0.5 rounded text-[9px] bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30">
-                  ONLINE
-                </span>
-              </div>
-              <div className="text-base font-bold text-white mb-1">
-                {currentSat.satelliteId} - {currentSat.name}
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-400 pt-2 border-t border-gray-800/80">
-                <div>
-                  <span className="text-gray-500 block">TYPE</span>
-                  <span className="text-gray-200">{currentSat.type || 'CubeSat 3U'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">ORBIT</span>
-                  <span className="text-[#00F0FF]">{currentSat.orbitType || 'LEO-POLAR'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Signal Strength & Latency Big Boxes */}
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              
-              {/* Signal Strength */}
-              <div className="bg-[#121C36]/70 border border-gray-800 rounded p-3 font-mono">
-                <span className="text-[9px] text-gray-500 uppercase tracking-widest block mb-1">
-                  SIGNAL STR
-                </span>
-                <div className="text-xl font-bold text-white mb-2">
-                  -62 <span className="text-xs font-normal text-gray-400">dBm</span>
-                </div>
-                {/* 5-bar signal strength meter */}
-                <div className="flex items-end space-x-1 h-3">
-                  <span className="w-1.5 h-1 bg-[#00F0FF] rounded-xs"></span>
-                  <span className="w-1.5 h-1.5 bg-[#00F0FF] rounded-xs"></span>
-                  <span className="w-1.5 h-2 bg-[#00F0FF] rounded-xs"></span>
-                  <span className="w-1.5 h-2.5 bg-[#00F0FF] rounded-xs"></span>
-                  <span className="w-1.5 h-3 bg-[#00F0FF] rounded-xs"></span>
-                </div>
-              </div>
-
-              {/* Latency */}
-              <div className="bg-[#121C36]/70 border border-gray-800 rounded p-3 font-mono">
-                <span className="text-[9px] text-gray-500 uppercase tracking-widest block mb-1">
-                  LATENCY
-                </span>
-                <div className="text-xl font-bold text-white mb-2">
-                  124 <span className="text-xs font-normal text-gray-400">ms</span>
-                </div>
-                <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-[#00FF66] h-full w-[35%]"></div>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Link Parameters Table */}
-            <div className="space-y-3 font-mono text-xs">
-              <div className="flex items-center justify-between py-1.5 border-b border-gray-800/60">
-                <span className="text-gray-500">Link Status</span>
-                <span className="text-[#00FF66] font-bold">CONNECTED</span>
-              </div>
-
-              <div className="flex items-center justify-between py-1.5 border-b border-gray-800/60">
-                <span className="text-gray-500">Last Contact</span>
-                <span className="text-white">14:22:05 UTC</span>
-              </div>
-
-              <div className="flex items-center justify-between py-1.5 border-b border-gray-800/60">
-                <span className="text-gray-500">Ground Station</span>
-                <span className="text-[#00F0FF] font-bold">GS-001 INDIA</span>
-              </div>
-
-              <div className="flex items-center justify-between py-1.5 border-b border-gray-800/60">
-                <span className="text-gray-500">Protocol</span>
-                <span className="text-gray-300">S-BAND XFER</span>
-              </div>
-
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-gray-500">Encryption</span>
-                <span className="text-[#00FF66] font-bold flex items-center space-x-1">
-                  <ShieldCheck size={13} />
-                  <span>AES-256</span>
-                </span>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Quick Frequency Uplink Indicator */}
-          <div className="p-3 rounded bg-[#0A1628] border border-gray-800 text-[11px] font-mono text-gray-400 flex items-center justify-between">
-            <span>UPLINK FREQ: 2025.5 MHz</span>
-            <span className="text-[#00F0FF] font-bold">LOCKED</span>
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* 3. BOTTOM EVENT LOG: COMMUNICATION EVENT LOG WITH EXPORT */}
-      <div className="bg-[#0A0F1F] border border-gray-800 rounded-lg overflow-hidden shadow-xl">
-        
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
-          <h3 className="font-mono text-sm font-bold text-white tracking-widest uppercase">
-            COMMUNICATION EVENT LOG
-          </h3>
-
-          <button
-            onClick={handleExportLog}
-            className="flex items-center space-x-2 text-xs font-mono text-gray-400 hover:text-[#00F0FF] transition-colors"
-          >
-            <Download size={13} />
-            <span className="uppercase tracking-wider">EXPORT LOG</span>
-          </button>
-        </div>
-
-        {/* Log Lines */}
-        <div className="p-5 font-mono text-xs space-y-2.5 max-h-60 overflow-y-auto">
-          {eventLogs.map((log, index) => (
-            <div key={index} className="flex items-start space-x-4 border-l-2 border-transparent hover:border-[#00F0FF] pl-2 py-0.5 transition-colors">
-              <span className="text-gray-500 whitespace-nowrap">{log.time}</span>
-              <span className={`font-bold whitespace-nowrap ${
-                log.level === 'WARN' ? 'text-[#FFB020]' : log.level === 'ERROR' ? 'text-[#FF2A2A]' : 'text-[#00F0FF]'
-              }`}>
-                {log.level}
+              <span className="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-[#00F0FF]">
+                {eventLogs.length} EVENTS
               </span>
-              <span className="text-gray-400 whitespace-nowrap">{log.src}</span>
-              <span className="text-gray-300">{log.text}</span>
             </div>
-          ))}
-        </div>
 
-      </div>
+            <div className="flex items-center space-x-3 font-mono text-xs">
+              <button
+                onClick={handleExportLog}
+                className="flex items-center space-x-1.5 text-gray-400 hover:text-[#00F0FF] transition-colors"
+                title="Download CSV log"
+              >
+                <Download size={12} />
+                <span className="uppercase text-[11px]">EXPORT</span>
+              </button>
+
+              <button
+                onClick={() => setIsEventLogMinimized(!isEventLogMinimized)}
+                className="p-1 text-gray-400 hover:text-white transition-colors"
+                title={isEventLogMinimized ? "Expand Event Log" : "Minimize Event Log"}
+              >
+                {isEventLogMinimized ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              </button>
+
+              <button
+                onClick={() => setShowEventLog(false)}
+                className="p-1 text-gray-400 hover:text-[#FF2A2A] transition-colors"
+                title="Close Event Log (Maximize Space)"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+
+          {/* Log Lines (Collapsed or Expanded) */}
+          {!isEventLogMinimized && (
+            <div className="p-4 font-mono text-xs space-y-2 max-h-48 overflow-y-auto bg-[#050912]">
+              {eventLogs.map((log, index) => (
+                <div key={index} className="flex items-start space-x-3 border-l-2 border-transparent hover:border-[#00F0FF] pl-2 py-0.5 transition-colors">
+                  <span className="text-gray-500 whitespace-nowrap text-[11px]">{log.time}</span>
+                  <span className={`font-bold whitespace-nowrap text-[11px] ${
+                    log.level === 'WARN' ? 'text-[#FFB020]' : log.level === 'ERROR' ? 'text-[#FF2A2A]' : 'text-[#00F0FF]'
+                  }`}>
+                    {log.level}
+                  </span>
+                  <span className="text-gray-400 whitespace-nowrap text-[11px]">{log.src}</span>
+                  <span className="text-gray-300 text-[11px] leading-tight">{log.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+        </div>
+      )}
 
     </div>
   );
