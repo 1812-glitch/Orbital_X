@@ -116,6 +116,44 @@ export default function NotificationCenter() {
     }
   };
 
+  // Combine satellites from context or fallback list
+  const fleetList = satellites.length > 0 ? satellites : [
+    { _id: '1', satelliteId: 'SAT-001', name: 'ORION' },
+    { _id: '2', satelliteId: 'SAT-002', name: 'NOVA' },
+    { _id: '3', satelliteId: 'SAT-003', name: 'AURORA' },
+    { _id: '4', satelliteId: 'SAT-004', name: 'VANGUARD' },
+    { _id: '5', satelliteId: 'CUBE-01', name: 'ALPHA-SAT' },
+    { _id: '6', satelliteId: 'SAT-BETA-2', name: 'BETA-2' }
+  ];
+
+  // Calculate per-satellite notification statistics
+  const satNotifStats = fleetList.reduce((acc, sat) => {
+    const satId = sat.satelliteId?.toLowerCase() || '';
+    const satName = sat.name?.toLowerCase() || '';
+    const key = sat._id || sat.satelliteId;
+
+    let count = 0;
+    let hasAlert = false;
+    let unreadSatCount = 0;
+
+    notifications.forEach(n => {
+      const text = `${n.title || ''} ${n.message || ''}`.toLowerCase();
+      const directMatch = n.satelliteId && (n.satelliteId === sat._id || n.satelliteId === sat.satelliteId || n.satelliteId?.satelliteId === sat.satelliteId);
+      const textMatch = (satId && text.includes(satId)) || (satName && text.includes(satName));
+      if (directMatch || textMatch) {
+        count += 1;
+        if (n.type === 'ALERT') hasAlert = true;
+        if (!n.read) unreadSatCount += 1;
+      }
+    });
+
+    acc[key] = { count, hasAlert, unreadSatCount };
+    return acc;
+  }, {});
+
+  const activeSat = fleetList.find(s => s._id === satFilter || s.satelliteId === satFilter);
+  const activeSatName = activeSat ? (activeSat.name ? `${activeSat.name} (${activeSat.satelliteId})` : activeSat.satelliteId) : satFilter;
+
   const getFilteredNotifications = () => {
     return notifications.filter(notif => {
       if (filter === 'UNREAD' && notif.read) return false;
@@ -124,12 +162,13 @@ export default function NotificationCenter() {
       if (filter === 'SYSTEM' && notif.type !== 'SYSTEM') return false;
 
       if (satFilter !== 'ALL') {
-        const text = `${notif.title} ${notif.message}`.toLowerCase();
-        const target = satellites.find(s => s._id === satFilter || s.satelliteId === satFilter);
+        const text = `${notif.title || ''} ${notif.message || ''}`.toLowerCase();
+        const target = fleetList.find(s => s._id === satFilter || s.satelliteId === satFilter);
         if (target) {
+          const directMatch = notif.satelliteId && (notif.satelliteId === target._id || notif.satelliteId === target.satelliteId || notif.satelliteId?.satelliteId === target.satelliteId);
           const idMatch = target.satelliteId && text.includes(target.satelliteId.toLowerCase());
           const nameMatch = target.name && text.includes(target.name.toLowerCase());
-          if (!idMatch && !nameMatch) return false;
+          if (!directMatch && !idMatch && !nameMatch) return false;
         }
       }
       return true;
@@ -334,10 +373,116 @@ export default function NotificationCenter() {
         </div>
       </div>
 
+      {/* SEE SATELLITE ONLY - QUICK SELECTOR SHELF WITH COLOURED CIRCLES */}
+      <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-3.5 space-y-3 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="w-5 h-5 rounded bg-[#00F0FF]/15 border border-[#00F0FF]/30 flex items-center justify-center">
+              <Satellite size={12} className="text-[#00F0FF]" />
+            </div>
+            <span className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+              SEE SATELLITE ONLY:
+            </span>
+            <span className="text-[10px] font-mono text-gray-400 hidden sm:inline">
+              (Filter orbital notifications per asset)
+            </span>
+          </div>
+
+          {satFilter !== 'ALL' && (
+            <button
+              onClick={() => setSatFilter('ALL')}
+              className="text-[11px] font-mono text-[#00F0FF] hover:underline font-bold"
+            >
+              ✕ SHOW ALL NOTIFICATIONS
+            </button>
+          )}
+        </div>
+
+        {/* Horizontal Chips Row */}
+        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 font-mono text-xs scrollbar-thin">
+          <button
+            onClick={() => setSatFilter('ALL')}
+            className={`px-3 py-1.5 rounded border transition-all flex items-center space-x-2 shrink-0 ${
+              satFilter === 'ALL'
+                ? 'bg-[#00F0FF]/20 border-[#00F0FF] text-white shadow-[0_0_12px_rgba(0,240,255,0.25)] ring-1 ring-[#00F0FF]/50'
+                : 'bg-[#050810] border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
+            }`}
+          >
+            <span className="font-bold">ALL FLEET</span>
+            <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-gray-700 text-white">
+              {notifications.length}
+            </span>
+          </button>
+
+          {fleetList.map(sat => {
+            const satKey = sat._id || sat.satelliteId;
+            const isSelected = satFilter === sat._id || satFilter === sat.satelliteId;
+            const stat = satNotifStats[satKey] || { count: 0, hasAlert: false, unreadSatCount: 0 };
+
+            // Colored circle logic based on alert severity and unread count
+            let circleStyle = "bg-gray-800 text-gray-400";
+            if (stat.hasAlert) {
+              circleStyle = "bg-[#FF2A2A] text-white shadow-[0_0_8px_rgba(255,42,42,0.7)] animate-pulse";
+            } else if (stat.unreadSatCount > 0) {
+              circleStyle = "bg-[#00F0FF] text-[#0A0F1F] font-bold shadow-[0_0_6px_rgba(0,240,255,0.5)]";
+            } else if (stat.count > 0) {
+              circleStyle = "bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/40";
+            }
+
+            return (
+              <button
+                key={satKey}
+                onClick={() => {
+                  if (isSelected) {
+                    setSatFilter('ALL');
+                  } else {
+                    setSatFilter(sat._id || sat.satelliteId);
+                    selectSatellite(sat);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded border transition-all flex items-center space-x-2 shrink-0 group ${
+                  isSelected
+                    ? 'bg-[#00F0FF]/20 border-[#00F0FF] text-white shadow-[0_0_15px_rgba(0,240,255,0.25)] ring-1 ring-[#00F0FF]'
+                    : 'bg-[#050810] border-gray-800 text-gray-300 hover:text-white hover:border-gray-700'
+                }`}
+                title={`Filter notifications for ${sat.name || sat.satelliteId}`}
+              >
+                <span className="font-bold truncate max-w-[130px] group-hover:text-[#00F0FF] transition-colors">
+                  {sat.name || sat.satelliteId}
+                </span>
+
+                {/* Colored circle with count number */}
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${circleStyle}`}>
+                  {stat.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Active Banner */}
+        {satFilter !== 'ALL' && (
+          <div className="bg-[#00F0FF]/10 border border-[#00F0FF]/30 rounded px-3 py-1.5 flex items-center justify-between text-xs font-mono text-[#00F0FF]">
+            <div className="flex items-center space-x-2">
+              <span className="w-2 h-2 rounded-full bg-[#00F0FF] animate-ping"></span>
+              <span>
+                SEEING SATELLITE ONLY: <strong className="text-white underline">{activeSatName}</strong> ({filteredItems.length} notifications)
+              </span>
+            </div>
+            <button
+              onClick={() => setSatFilter('ALL')}
+              className="px-2.5 py-0.5 rounded bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 text-white font-bold transition-colors"
+            >
+              Reset to All
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-800 pb-3">
         <span className="text-xs font-mono text-gray-500 mr-2 flex items-center">
-          <Filter size={12} className="mr-1" /> FILTER:
+          <Filter size={12} className="mr-1" /> CATEGORY:
         </span>
         {[
           { key: 'ALL', label: 'ALL NOTIFICATIONS', count: notifications.length },
@@ -364,7 +509,7 @@ export default function NotificationCenter() {
           </button>
         ))}
 
-        {/* Satellite Asset Filter */}
+        {/* Satellite Asset Filter Dropdown */}
         <div className="ml-auto flex items-center space-x-2">
           <Satellite size={13} className="text-[#00F0FF]" />
           <select
@@ -373,14 +518,14 @@ export default function NotificationCenter() {
             onChange={(e) => {
               setSatFilter(e.target.value);
               if (e.target.value !== 'ALL') {
-                const found = satellites.find(s => s._id === e.target.value || s.satelliteId === e.target.value);
+                const found = fleetList.find(s => s._id === e.target.value || s.satelliteId === e.target.value);
                 if (found) selectSatellite(found);
               }
             }}
             className="bg-[#0B1221] border border-gray-800 hover:border-gray-700 rounded px-2.5 py-1.5 text-xs font-mono font-bold text-gray-200 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer"
           >
             <option value="ALL">ALL ASSETS</option>
-            {satellites.map(s => (
+            {fleetList.map(s => (
               <option key={s._id || s.satelliteId} value={s._id || s.satelliteId}>
                 {s.name || s.satelliteId}
               </option>
