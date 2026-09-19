@@ -17,7 +17,8 @@ export default function Scene({
   showLabels = true, 
   showUplinks = true, 
   nightMode = true, 
-  autoRotate = true 
+  autoRotate = true,
+  showOverlay = false
 }) {
   const containerRef = useRef();
   const globeRef = useRef();
@@ -254,37 +255,39 @@ export default function Scene({
         arcDashAnimateTime={1500}
       />
       
-      {/* Viewport Overlay UI: Status Badge */}
-      <div className="absolute top-4 right-4 pointer-events-none flex flex-col items-end space-y-2">
-        <div className="flex items-center space-x-2 text-[10px] font-mono text-[#00F0FF] tracking-widest bg-[#00F0FF]/10 px-3 py-1.5 rounded border border-[#00F0FF]/30 backdrop-blur-md">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F0FF] opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00F0FF]"></span>
-          </span>
-          <span>LIVE 3D ORBITAL SIMULATION</span>
-        </div>
-
-        {selectedSatIds.length > 0 && (
-          <div className="flex items-center space-x-2 bg-[#0A0F1F]/90 border border-gray-800 px-3 py-1.5 rounded-md backdrop-blur-md">
-            <span className="text-[10px] font-mono text-gray-400">PROJECTING:</span>
-            <div className="flex items-center space-x-1.5">
-              {selectedSatIds.map((id, idx) => (
-                <span 
-                  key={id}
-                  className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold"
-                  style={{ 
-                    backgroundColor: `${SAT_SLOT_COLORS[idx]}25`, 
-                    color: SAT_SLOT_COLORS[idx],
-                    border: `1px solid ${SAT_SLOT_COLORS[idx]}60`
-                  }}
-                >
-                  {id}
-                </span>
-              ))}
-            </div>
+      {/* Viewport Overlay UI: Status Badge (Optional, disabled in OrbitalViewer to avoid overlapping with top toolbar) */}
+      {showOverlay && (
+        <div className="absolute top-4 right-4 pointer-events-none flex flex-col items-end space-y-2">
+          <div className="flex items-center space-x-2 text-[10px] font-mono text-[#00F0FF] tracking-widest bg-[#00F0FF]/10 px-3 py-1.5 rounded border border-[#00F0FF]/30 backdrop-blur-md">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F0FF] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00F0FF]"></span>
+            </span>
+            <span>LIVE 3D ORBITAL SIMULATION</span>
           </div>
-        )}
-      </div>
+
+          {selectedSatIds.length > 0 && (
+            <div className="flex items-center space-x-2 bg-[#0A0F1F]/90 border border-gray-800 px-3 py-1.5 rounded-md backdrop-blur-md">
+              <span className="text-[10px] font-mono text-gray-400">PROJECTING:</span>
+              <div className="flex items-center space-x-1.5">
+                {selectedSatIds.map((id, idx) => (
+                  <span 
+                    key={id}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold"
+                    style={{ 
+                      backgroundColor: `${SAT_SLOT_COLORS[idx]}25`, 
+                      color: SAT_SLOT_COLORS[idx],
+                      border: `1px solid ${SAT_SLOT_COLORS[idx]}60`
+                    }}
+                  >
+                    {id}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       
       {/* Bottom Controls Legend */}
       <div className="absolute bottom-4 right-4 pointer-events-none">

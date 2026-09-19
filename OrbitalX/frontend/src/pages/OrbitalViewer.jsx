@@ -5,7 +5,7 @@ import OrbitalViewerLoading from '../components/orbital/OrbitalViewerLoading';
 import OrbitalSidebar from '../components/orbital/OrbitalSidebar';
 import { useOrbitalViewerState } from '../hooks/useOrbitalViewerState';
 import { SlidersHorizontal, Satellite as SatIcon, Layers } from 'lucide-react';
-import { MAX_SELECTED_SATELLITES } from '../utils/orbitalMath';
+import { SAT_SLOT_COLORS, MAX_SELECTED_SATELLITES } from '../utils/orbitalMath';
 
 export default function OrbitalViewer() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -80,6 +80,23 @@ export default function OrbitalViewer() {
             <SatIcon size={13} className="text-[#00F0FF]" />
             <span>Tracking:</span>
             <strong className="text-[#00F0FF]">{selectedSatIds.length}/{MAX_SELECTED_SATELLITES}</strong>
+            {selectedSatIds.length > 0 && (
+              <div className="flex items-center space-x-1 pl-1.5">
+                {selectedSatIds.map((id, idx) => (
+                  <span 
+                    key={id}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold"
+                    style={{ 
+                      backgroundColor: `${SAT_SLOT_COLORS[idx]}25`, 
+                      color: SAT_SLOT_COLORS[idx],
+                      border: `1px solid ${SAT_SLOT_COLORS[idx]}60`
+                    }}
+                  >
+                    {id}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-1.5 text-xs font-mono text-gray-400 hidden lg:flex">
             <Layers size={13} className="text-gray-500" />
