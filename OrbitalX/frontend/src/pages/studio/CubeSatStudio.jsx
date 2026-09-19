@@ -18,7 +18,6 @@ import {
   ChevronRight
 } from 'lucide-react';
 import CubeSatCanvas from './CubeSatCanvas';
-import CubeSatSimulator from './CubeSatSimulator';
 import { CUBESAT_COMPONENTS, COMPONENT_CATEGORIES, FORM_FACTORS } from './cubesatComponents';
 
 export default function CubeSatStudio() {
@@ -32,7 +31,6 @@ export default function CubeSatStudio() {
   const [mountedComponents, setMountedComponents] = useState({});
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState('3D'); // '3D' | 'SIMULATE'
   
   // Animation & Diagnostics State
   const [autoRotate, setAutoRotate] = useState(false);
@@ -259,17 +257,13 @@ export default function CubeSatStudio() {
       
       {/* 1. FULL-BLEED 3D VIEWPORT CANVAS (Occupies 100% of the screen) */}
       <div className="absolute inset-0 w-full h-full">
-        {viewMode === 'SIMULATE' ? (
-          <CubeSatSimulator />
-        ) : (
-          <CubeSatCanvas 
-            formFactor={formFactor}
-            mountedComponents={mountedComponents}
-            isAssembling={isAssembling}
-            isValidating={isValidating}
-            autoRotate={autoRotate}
-          />
-        )}
+        <CubeSatCanvas 
+          formFactor={formFactor}
+          mountedComponents={mountedComponents}
+          isAssembling={isAssembling}
+          isValidating={isValidating}
+          autoRotate={autoRotate}
+        />
       </div>
 
       {/* 2. FLOATING TOP TOOLBAR OVER CANVAS (Matching OrbitalViewer & CubeSatSimulator HUD) */}
@@ -311,30 +305,10 @@ export default function CubeSatStudio() {
             )}
           </div>
 
-          {/* Mode Switcher: CAD Assembly vs Live Simulation */}
-          <div className="flex items-center bg-[#050810] border border-gray-800 rounded p-0.5 font-mono text-xs font-bold">
-            <button
-              onClick={() => setViewMode('3D')}
-              className={`px-2.5 py-1 rounded transition-all ${
-                viewMode !== 'SIMULATE'
-                  ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              CAD ASSEMBLY
-            </button>
-            <button
-              id="cubesat-studio-sim-tab-btn"
-              onClick={() => setViewMode('SIMULATE')}
-              className={`px-2.5 py-1 rounded transition-all flex items-center space-x-1 ${
-                viewMode === 'SIMULATE'
-                  ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
-                  : 'text-[#00F0FF] hover:bg-[#00F0FF]/15'
-              }`}
-            >
-              <Activity size={12} />
-              <span className="hidden md:inline">LIVE SIMULATION</span>
-            </button>
+          {/* CAD Studio Mode Pill */}
+          <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-[#00F0FF]/15 border border-[#00F0FF]/30 rounded font-mono text-xs font-bold text-[#00F0FF]">
+            <Wrench size={12} />
+            <span>CAD ASSEMBLY</span>
           </div>
 
           {/* Form Factor Switcher (1U, 2U, 3U) */}
