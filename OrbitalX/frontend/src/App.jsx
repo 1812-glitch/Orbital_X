@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { SatelliteProvider } from './context/SatelliteContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import PageLoader from './components/common/PageLoader';
@@ -43,59 +44,61 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ErrorBoundary>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <SatelliteProvider>
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-              {/* Protected Routes (wrapped in Layout) */}
-              <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/orbit" element={<OrbitalViewer />} />
-              <Route path="/studio" element={<CubeSatStudio />} />
-              <Route path="/cubesat-sim" element={<CubeSatSimulator />} />
-              
-              {/* Phase 4: Satellites */}
-              <Route path="/satellites" element={<SatelliteFleet />} />
-              <Route path="/satellites/:id" element={<SatelliteDetail />} />
+                {/* Protected Routes (wrapped in Layout) */}
+                <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/orbit" element={<OrbitalViewer />} />
+                  <Route path="/studio" element={<CubeSatStudio />} />
+                  <Route path="/cubesat-sim" element={<CubeSatSimulator />} />
+                  
+                  {/* Phase 4: Satellites */}
+                  <Route path="/satellites" element={<SatelliteFleet />} />
+                  <Route path="/satellites/:id" element={<SatelliteDetail />} />
 
-              {/* Phase 4: Missions */}
-              <Route path="/missions" element={<MissionFleet />} />
-              <Route path="/missions/:id" element={<MissionDetail />} />
-              <Route path="/communications" element={<Communications />} />
-              <Route path="/ground-stations" element={<GroundStations />} />
+                  {/* Phase 4: Missions */}
+                  <Route path="/missions" element={<MissionFleet />} />
+                  <Route path="/missions/:id" element={<MissionDetail />} />
+                  <Route path="/communications" element={<Communications />} />
+                  <Route path="/ground-stations" element={<GroundStations />} />
 
-              {/* Phase 9/11: Telemetry & Alerts */}
-              <Route path="/telemetry" element={<TelemetryAnalytics />} />
-              <Route path="/alerts" element={<AlertsIncidents />} />
-              <Route path="/notifications" element={<NotificationCenter />} />
+                  {/* Phase 9/11: Telemetry & Alerts */}
+                  <Route path="/telemetry" element={<TelemetryAnalytics />} />
+                  <Route path="/alerts" element={<AlertsIncidents />} />
+                  <Route path="/notifications" element={<NotificationCenter />} />
 
-              {/* Phase 12: Analytics */}
-              <Route path="/analytics" element={<FleetAnalytics />} />
-              <Route path="/reports" element={<Reports />} />
+                  {/* Phase 12: Analytics */}
+                  <Route path="/analytics" element={<FleetAnalytics />} />
+                  <Route path="/reports" element={<Reports />} />
 
-              {/* Phase 13/15: Admin Dashboard & Logs */}
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/users" element={<UserManagement />} />
-              <Route path="/admin/logs" element={<ActivityLogs />} />
+                  {/* Phase 13/15: Admin Dashboard & Logs */}
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/admin/users" element={<UserManagement />} />
+                  <Route path="/admin/logs" element={<ActivityLogs />} />
 
-              {/* Phase 14: Settings */}
-              <Route path="/settings" element={<SettingsLayout />}>
-                <Route index element={<Profile />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="preferences" element={<Preferences />} />
-                <Route path="diagnostics" element={<Diagnostics />} />
-              </Route>
-            </Route>
+                  {/* Phase 14: Settings */}
+                  <Route path="/settings" element={<SettingsLayout />}>
+                    <Route index element={<Profile />} />
+                    <Route path="profile" element={<Profile />} />
+                    <Route path="preferences" element={<Preferences />} />
+                    <Route path="diagnostics" element={<Diagnostics />} />
+                  </Route>
+                </Route>
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
+        </SatelliteProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -6,8 +6,10 @@ import {
   RadioTower,
   Radio,
   Wifi,
+  Eye,
 } from 'lucide-react';
 import { isCubeSatType } from '../../../utils/orbitalMath';
+import { useSatellite } from '../../../context/SatelliteContext';
 
 export default function OrbitingSatelliteCard({
   item,
@@ -21,6 +23,7 @@ export default function OrbitingSatelliteCard({
   const sat = item.satellite;
   const tel = item.telemetry;
   const isCubeSat = isCubeSatType(sat);
+  const { selectSatellite, openDetailModal } = useSatellite();
 
   return (
     <div
@@ -101,20 +104,33 @@ export default function OrbitingSatelliteCard({
           </div>
         </div>
 
-        {/* Status Indicator */}
-        <div className="flex items-center space-x-1.5 shrink-0">
-          <span
-            className={`w-2 h-2 rounded-full ${
-              sat.status === 'OFFLINE'
-                ? 'bg-red-500'
-                : sat.status === 'WARNING'
-                ? 'bg-yellow-400'
-                : 'bg-[#00FF66] shadow-[0_0_8px_#00FF66]'
-            } ${isSelected ? 'animate-pulse' : ''}`}
-          />
-          <span className="text-[10px] font-mono text-gray-400 uppercase">
-            {sat.status}
-          </span>
+        {/* Status Indicator & Inspect Action */}
+        <div className="flex items-center space-x-2 shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              selectSatellite(sat);
+              openDetailModal(sat);
+            }}
+            className="p-1 text-gray-400 hover:text-[#00F0FF] hover:bg-gray-800 rounded transition-colors"
+            title={`Inspect ${sat.name} Specs`}
+          >
+            <Eye size={13} />
+          </button>
+          <div className="flex items-center space-x-1.5">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                sat.status === 'OFFLINE'
+                  ? 'bg-red-500'
+                  : sat.status === 'WARNING'
+                  ? 'bg-yellow-400'
+                  : 'bg-[#00FF66] shadow-[0_0_8px_#00FF66]'
+              } ${isSelected ? 'animate-pulse' : ''}`}
+            />
+            <span className="text-[10px] font-mono text-gray-400 uppercase">
+              {sat.status}
+            </span>
+          </div>
         </div>
       </div>
 

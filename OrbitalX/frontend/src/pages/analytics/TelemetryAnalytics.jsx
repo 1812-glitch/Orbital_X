@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import telemetryService from '../../services/telemetryService';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
-import { Activity, Zap, Thermometer, Wifi } from 'lucide-react';
+import { Activity, Zap, Thermometer, Wifi, Satellite, Eye, ChevronDown } from 'lucide-react';
+import { useSatellite } from '../../context/SatelliteContext';
 
 export default function TelemetryAnalytics() {
   const [stats, setStats] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { satellites, selectedSatellite, selectSatellite, openDetailModal } = useSatellite();
 
   const fetchData = async () => {
     try {
@@ -15,10 +17,7 @@ export default function TelemetryAnalytics() {
         telemetryService.getHistoricalTelemetry()
       ]);
       setStats(statsRes.data);
-      
-      // Process history for global charting if needed, or just keep as-is.
-      // historyRes.data is an array of satellites, each with 'records'.
-      setHistory(historyRes.data);
+      setHistory(historyRes.data || []);
     } catch (err) {
       console.error('Error fetching analytics data:', err);
     } finally {
@@ -71,9 +70,14 @@ export default function TelemetryAnalytics() {
     </div>
   );
 
-  // Process data for charts: Let's pick the first satellite for detailed charts
-  const primarySat = history[0];
-  const chartData = primarySat?.records.map(r => ({
+  // Match the user's selected satellite with one in historical telemetry records
+  const targetSat = history.find(s => 
+    s._id === selectedSatellite?._id || 
+    s.satelliteId === selectedSatellite?.satelliteId ||
+    (s.name && selectedSatellite?.name && s.name.toLowerCase() === selectedSatellite.name.toLowerCase())
+  ) || history[0];
+
+  const chartData = targetSat?.records?.map(r => ({
     time: new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     power: r.power,
     temperature: r.temperature,
@@ -84,11 +88,66 @@ export default function TelemetryAnalytics() {
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-500">
       
-      <div className="flex justify-between items-end border-b border-gray-800 pb-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-gray-800 pb-4 gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-widest text-white uppercase mb-2">Telemetry Analytics</h1>
+          <h1 className="text-3xl font-bold tracking-widest text-white uppercase mb-1">Telemetry Analytics</h1>
           <p className="text-gray-400 font-mono text-sm">Historical performance and subsystem tracking</p>
         </div>
+
+        {/* Prominent Satellite Selector Bar */}
+        <div className="flex flex-wrap items-center gap-2.5 bg-[#0B1221] border border-gray-700/80 p-2 rounded-xl">
+          <div className="flex items-center space-x-2 text-xs font-mono text-gray-400 pl-2">
+            <Satellite size={16} className="text-[#00F0FF]" />
+            <span className="hidden sm:inline font-bold text-gray-300">ASSET:</span>
+          </div>
+
+          <select
+            id="telemetry-satellite-select"
+            value={targetSat?._id || targetSat?.satelliteId || ''}
+            onChange={(e) => {
+              const matched = history.find(s => s._id === e.target.value || s.satelliteId === e.target.value);
+              if (matched) selectSatellite(matched);
+            }}
+            className="bg-[#050810] border border-gray-700 text-[#00F0FF] font-mono text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#00F0FF] cursor-pointer"
+          >
+            {history.map((sat) => (
+              <option key={sat._id || sat.satelliteId} value={sat._id || sat.satelliteId}>
+                {sat.name || sat.satelliteId} ({sat.satelliteId})
+              </option>
+            ))}
+          </select>
+
+          <button
+            id="telemetry-inspect-modal-btn"
+            onClick={() => openDetailModal(targetSat)}
+            className="flex items-center space-x-1.5 bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 text-[#00F0FF] border border-[#00F0FF]/40 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors shadow-sm"
+            title="Inspect Satellite Specs"
+          >
+            <Eye size={13} />
+            <span>INSPECT SPECS</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Selection Chips for Active Fleet */}
+      <div className="flex items-center space-x-2 overflow-x-auto pb-1 text-xs font-mono">
+        <span className="text-gray-500 uppercase text-[11px] whitespace-nowrap">FLEET NODES:</span>
+        {history.map((sat) => {
+          const isCurrent = (targetSat?._id === sat._id || targetSat?.satelliteId === sat.satelliteId);
+          return (
+            <button
+              key={sat._id || sat.satelliteId}
+              onClick={() => selectSatellite(sat)}
+              className={`px-2.5 py-1 rounded-lg transition-all whitespace-nowrap border ${
+                isCurrent
+                  ? 'bg-[#00F0FF] text-black font-bold border-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+                  : 'bg-[#0B1221] hover:bg-[#121C36] text-gray-300 border-gray-800 hover:border-gray-700'
+              }`}
+            >
+              {sat.name || sat.satelliteId}
+            </button>
+          );
+        })}
       </div>
 
       {/* Global Stats Row */}
@@ -138,7 +197,7 @@ export default function TelemetryAnalytics() {
         <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-6">
           <h3 className="text-white font-mono text-sm tracking-widest uppercase mb-6 flex items-center">
             <Zap size={16} className="text-[#00F0FF] mr-2" />
-            Power Draw Dynamics ({primarySat.name})
+            Power Draw Dynamics ({targetSat?.name || targetSat?.satelliteId})
           </h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -166,7 +225,7 @@ export default function TelemetryAnalytics() {
         <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-6">
           <h3 className="text-white font-mono text-sm tracking-widest uppercase mb-6 flex items-center">
             <Thermometer size={16} className="text-red-500 mr-2" />
-            Thermal Stability ({primarySat.name})
+            Thermal Stability ({targetSat?.name || targetSat?.satelliteId})
           </h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -187,7 +246,7 @@ export default function TelemetryAnalytics() {
         <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-6 lg:col-span-2">
           <h3 className="text-white font-mono text-sm tracking-widest uppercase mb-6 flex items-center">
             <Activity size={16} className="text-[#00FF66] mr-2" />
-            Latency vs Core Health ({primarySat.name})
+            Latency vs Core Health ({targetSat?.name || targetSat?.satelliteId})
           </h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">

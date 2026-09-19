@@ -23,11 +23,16 @@ import {
   X,
   Menu,
   ExternalLink,
-  Cpu
+  Cpu,
+  ChevronDown,
+  Search,
+  Eye
 } from 'lucide-react';
 import api from '../../lib/apiClient';
 import { adminService } from '../../services/adminService';
 import notificationService from '../../services/notificationService';
+import { useSatellite } from '../../context/SatelliteContext';
+import SatelliteDetailModal from '../satellites/SatelliteDetailModal';
 
 export default function DashboardLayout() {
   const { user } = useAuth();
@@ -43,8 +48,13 @@ export default function DashboardLayout() {
   const notifRef = useRef(null);
   const lastCountRef = useRef(null);
 
-  // Mobile navigation drawer state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Satellite Context & Dropdown State
+  const { satellites, selectedSatellite, selectSatellite, openDetailModal } = useSatellite();
+  const [isSatDropdownOpen, setIsSatDropdownOpen] = useState(false);
+  const [satSearch, setSatSearch] = useState('');
+  const satDropdownRef = useRef(null);
 
   // Close mobile drawer and reset window scroll on route change
   useEffect(() => {
@@ -115,14 +125,17 @@ export default function DashboardLayout() {
       if (notifRef.current && !notifRef.current.contains(event.target)) {
         setIsNotifOpen(false);
       }
+      if (satDropdownRef.current && !satDropdownRef.current.contains(event.target)) {
+        setIsSatDropdownOpen(false);
+      }
     };
-    if (isNotifOpen) {
+    if (isNotifOpen || isSatDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isNotifOpen]);
+  }, [isNotifOpen, isSatDropdownOpen]);
 
   const handleMarkAllRead = async () => {
     try {
@@ -299,6 +312,127 @@ export default function DashboardLayout() {
                 UPLINK: {sysStatus.api ? 'CONNECTED' : 'OFFLINE'}
               </span>
             </div>
+          </div>
+
+          {/* Ubiquitous Satellite Quick Selector */}
+          <div className="relative mx-2 sm:mx-4" ref={satDropdownRef}>
+            <button
+              id="header-satellite-selector-btn"
+              onClick={() => setIsSatDropdownOpen(!isSatDropdownOpen)}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border font-mono text-xs transition-all shadow-sm ${
+                isSatDropdownOpen
+                  ? 'bg-[#121C36] border-[#00F0FF] text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.25)]'
+                  : 'bg-[#121C36]/80 hover:bg-[#121C36] border-gray-700 hover:border-[#00F0FF]/50 text-gray-200'
+              }`}
+              title="Select Active Satellite"
+            >
+              <div className="flex items-center space-x-1.5">
+                <Satellite size={14} className="text-[#00F0FF]" />
+                <span className="font-bold tracking-wider text-white">
+                  {selectedSatellite?.name || 'SELECT SATELLITE'}
+                </span>
+                {selectedSatellite && (
+                  <span className="text-[10px] text-[#00FF66] font-semibold hidden md:inline px-1.5 py-0.2 bg-[#00FF66]/10 rounded border border-[#00FF66]/20">
+                    {selectedSatellite.orbitType || 'LEO'}
+                  </span>
+                )}
+              </div>
+              <ChevronDown size={13} className={`text-gray-400 transition-transform ${isSatDropdownOpen ? 'rotate-180 text-[#00F0FF]' : ''}`} />
+            </button>
+
+            {/* Satellite Dropdown Menu */}
+            {isSatDropdownOpen && (
+              <div className="absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mt-2 w-72 sm:w-80 bg-[#0B1221] border border-gray-700 rounded-xl shadow-[0_15px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden backdrop-blur-md animate-in fade-in duration-150">
+                <div className="p-2.5 bg-[#070C18] border-b border-gray-800 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-gray-400 font-bold uppercase tracking-wider">
+                    <span>ACTIVE ASSETS ({satellites.length})</span>
+                    {selectedSatellite && (
+                      <button
+                        id="inspect-active-satellite-btn"
+                        onClick={() => {
+                          setIsSatDropdownOpen(false);
+                          openDetailModal(selectedSatellite);
+                        }}
+                        className="text-[#00F0FF] hover:underline flex items-center space-x-1"
+                      >
+                        <Eye size={11} />
+                        <span>INSPECT ACTIVE</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2.5 top-2 text-gray-500" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, ID, or orbit..."
+                      value={satSearch}
+                      onChange={(e) => setSatSearch(e.target.value)}
+                      className="w-full bg-[#050810] border border-gray-800 rounded pl-7 pr-3 py-1 text-xs text-white font-mono placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/60"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto divide-y divide-gray-800/60 p-1">
+                  {satellites
+                    .filter((s) => 
+                      (s.name || '').toLowerCase().includes(satSearch.toLowerCase()) ||
+                      (s.satelliteId || '').toLowerCase().includes(satSearch.toLowerCase()) ||
+                      (s.orbitType || '').toLowerCase().includes(satSearch.toLowerCase())
+                    )
+                    .map((s) => {
+                      const isSelected = selectedSatellite?._id === s._id || selectedSatellite?.satelliteId === s.satelliteId;
+                      return (
+                        <div
+                          key={s._id || s.satelliteId}
+                          onClick={() => {
+                            selectSatellite(s);
+                            setIsSatDropdownOpen(false);
+                          }}
+                          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'bg-[#00F0FF]/15 border-l-2 border-[#00F0FF]'
+                              : 'hover:bg-[#121C36]/80 border-l-2 border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                              s.status === 'CRITICAL' ? 'bg-[#FF2A2A]' :
+                              s.status === 'WARNING' ? 'bg-[#FFB000]' :
+                              'bg-[#00FF66]'
+                            }`} />
+                            <div className="min-w-0">
+                              <div className="flex items-center space-x-1.5">
+                                <span className={`text-xs font-mono font-bold truncate ${isSelected ? 'text-[#00F0FF]' : 'text-white'}`}>
+                                  {s.name}
+                                </span>
+                                <span className="text-[10px] font-mono text-gray-400">
+                                  {s.satelliteId}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-mono text-gray-500 uppercase">
+                                {s.orbitType || 'LEO'} • {s.status || 'NOMINAL'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsSatDropdownOpen(false);
+                              openDetailModal(s);
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-[#00F0FF] hover:bg-gray-800 rounded transition-colors ml-2"
+                            title={`Inspect ${s.name} Details`}
+                          >
+                            <Eye size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Actions */}
@@ -542,6 +676,8 @@ export default function DashboardLayout() {
           </aside>
         </div>
       )}
+      {/* Global Universal Satellite Detail Modal */}
+      <SatelliteDetailModal />
     </div>
   );
 }

@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AlertTriangle, CheckCircle, Search, Filter } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Search, Filter, Eye, Satellite } from 'lucide-react';
 import alertService from '../../services/alertService';
 import satelliteService from '../../services/satelliteService';
 import { format } from 'date-fns';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
+import { useSatellite } from '../../context/SatelliteContext';
 
 export default function AlertsIncidents() {
   const [alerts, setAlerts] = useState([]);
   const [satellites, setSatellites] = useState([]);
   const [stats, setStats] = useState({ critical: 0, warning: 0, resolved: 0, total24h: 0 });
   const [loading, setLoading] = useState(true);
+  const { selectedSatellite, selectSatellite, openDetailModal } = useSatellite();
 
   // Filters
   const [search, setSearch] = useState('');
@@ -208,16 +210,22 @@ export default function AlertsIncidents() {
             <option value="WARNING">WARNING</option>
           </select>
 
-          {/* Satellite Filter Dropdown (From design: SAT: ALL) */}
+          {/* Satellite Filter Dropdown (Enhanced with Names) */}
           <select 
             value={satelliteFilter} 
-            onChange={(e) => setSatelliteFilter(e.target.value)}
-            className="bg-[#050810] border border-gray-800 rounded px-3 py-2 text-gray-300 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer"
+            onChange={(e) => {
+              setSatelliteFilter(e.target.value);
+              if (e.target.value !== 'ALL') {
+                const found = satellites.find(s => s._id === e.target.value || s.satelliteId === e.target.value);
+                if (found) selectSatellite(found);
+              }
+            }}
+            className="bg-[#050810] border border-gray-800 rounded px-3 py-2 text-gray-300 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer font-bold"
           >
-            <option value="ALL">SAT: ALL</option>
+            <option value="ALL">ALL SATELLITES</option>
             {satellites.map(sat => (
               <option key={sat._id} value={sat._id}>
-                {sat.satelliteId}
+                {sat.name ? `${sat.name} (${sat.satelliteId})` : sat.satelliteId}
               </option>
             ))}
           </select>
@@ -292,9 +300,22 @@ export default function AlertsIncidents() {
                     }`}>
                       {alert.severity}
                     </span>
-                    <span className="text-[#00F0FF] font-mono text-xs font-bold tracking-widest uppercase">
-                      {alert.satelliteId ? alert.satelliteId.satelliteId : 'SAT-003'}
-                    </span>
+                    
+                    {/* Interactive Satellite Badge */}
+                    <button
+                      onClick={() => {
+                        const target = alert.satelliteId || satellites.find(s => s.satelliteId === 'SAT-003');
+                        if (target) {
+                          selectSatellite(target);
+                          openDetailModal(target);
+                        }
+                      }}
+                      className="inline-flex items-center space-x-1.5 text-[#00F0FF] bg-[#00F0FF]/10 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/30 px-2 py-0.5 rounded font-mono text-xs font-bold tracking-wider uppercase transition-colors"
+                      title="Inspect Satellite Details"
+                    >
+                      <Eye size={12} />
+                      <span>{alert.satelliteId ? (alert.satelliteId.name ? `${alert.satelliteId.name} [${alert.satelliteId.satelliteId}]` : alert.satelliteId.satelliteId) : 'SAT-003'}</span>
+                    </button>
                   </div>
                   <h2 className="text-2xl font-bold text-white tracking-tight font-sans">
                     {alert.type}

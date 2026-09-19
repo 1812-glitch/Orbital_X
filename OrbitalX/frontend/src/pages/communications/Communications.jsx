@@ -4,13 +4,17 @@ import {
   Search, 
   ShieldCheck, 
   Download, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  Eye,
+  Satellite
 } from 'lucide-react';
 import satelliteService from '../../services/satelliteService';
+import { useSatellite } from '../../context/SatelliteContext';
 
 export default function Communications() {
   const [activeTab, setActiveTab] = useState('COMMAND'); // 'LIVE FEED' | 'COMMAND' | 'ARCHIVE'
   const [satellites, setSatellites] = useState([]);
+  const { selectedSatellite, selectSatellite, openDetailModal } = useSatellite();
   const [selectedSat, setSelectedSat] = useState(null);
   const [searchParam, setSearchParam] = useState('');
   const [commandPriority, setCommandPriority] = useState('NORMAL');
@@ -44,8 +48,18 @@ export default function Communications() {
       }
     };
     loadFleet();
+  }, []);
 
-    // Default Seed Messages matching Live Comunications.png
+  // Sync with global SatelliteContext
+  useEffect(() => {
+    if (selectedSatellite && satellites.length > 0) {
+      const matched = satellites.find(s => s._id === selectedSatellite._id || s.satelliteId === selectedSatellite.satelliteId);
+      if (matched) setSelectedSat(matched);
+    }
+  }, [selectedSatellite, satellites]);
+
+  // Default Seed Messages matching Live Comunications.png
+  useEffect(() => {
     setMessages([
       { type: 'system', text: `--- ENCRYPTED COMM SESSION INITIATED AT ${new Date(Date.now() - 15 * 60000).toUTCString().slice(17, 25)} UTC ---` },
       { 
@@ -227,28 +241,45 @@ export default function Communications() {
                 return (
                   <div
                     key={sat._id || sat.satelliteId}
-                    onClick={() => setSelectedSat(sat)}
-                    className={`p-3 rounded border cursor-pointer transition-all ${
+                    onClick={() => {
+                      setSelectedSat(sat);
+                      selectSatellite(sat);
+                    }}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${
                       isSelected 
                         ? 'bg-[#00F0FF]/10 border-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.15)]' 
                         : 'bg-[#12192b]/60 border-gray-800 hover:border-gray-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-mono text-xs font-bold text-white">
-                        {sat.satelliteId} {sat.name}
-                      </span>
-                      <span className={`w-2 h-2 rounded-full ${
-                        isOffline ? 'bg-gray-500' : isWarning ? 'bg-[#FFB020] shadow-[0_0_6px_#FFB020]' : 'bg-[#00FF66] shadow-[0_0_6px_#00FF66]'
-                      }`}></span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="font-mono text-xs font-bold text-white truncate">
+                          {sat.satelliteId} {sat.name}
+                        </span>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                          isOffline ? 'bg-gray-500' : isWarning ? 'bg-[#FFB020] shadow-[0_0_6px_#FFB020]' : 'bg-[#00FF66] shadow-[0_0_6px_#00FF66]'
+                        }`}></span>
+                      </div>
+
+                      <div className="flex items-center justify-between font-mono text-[10px]">
+                        <span className="text-gray-500">{sat.orbitType || 'LEO-POLAR'}</span>
+                        <span className={isOffline ? 'text-gray-500' : isWarning ? 'text-[#FFB020]' : 'text-[#00FF66]'}>
+                          {isOffline ? 'LOS' : isWarning ? 'WARNING' : 'CONNECTED'}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center justify-between font-mono text-[10px]">
-                      <span className="text-gray-500">{sat.orbitType || 'LEO-POLAR'}</span>
-                      <span className={isOffline ? 'text-gray-500' : isWarning ? 'text-[#FFB020]' : 'text-[#00FF66]'}>
-                        {isOffline ? 'LOS' : isWarning ? 'WARNING: LATENCY' : 'CONNECTED'}
-                      </span>
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectSatellite(sat);
+                        openDetailModal(sat);
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-[#00F0FF] hover:bg-gray-800 rounded transition-colors ml-2 shrink-0"
+                      title={`Inspect ${sat.name} Details`}
+                    >
+                      <Eye size={13} />
+                    </button>
                   </div>
                 );
               })
@@ -262,23 +293,41 @@ export default function Communications() {
               ].map(item => (
                 <div
                   key={item.id}
-                  onClick={() => setSelectedSat({ satelliteId: item.id, name: item.name, orbitType: item.orbit, status: item.status })}
-                  className={`p-3 rounded border cursor-pointer transition-all ${
+                  onClick={() => {
+                    const satObj = { satelliteId: item.id, name: item.name, orbitType: item.orbit, status: item.status };
+                    setSelectedSat(satObj);
+                    selectSatellite(satObj);
+                  }}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${
                     currentSat.satelliteId === item.id 
                       ? 'bg-[#00F0FF]/10 border-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.15)]' 
                       : 'bg-[#12192b]/60 border-gray-800 hover:border-gray-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-xs font-bold text-white">
-                      {item.id} {item.name}
-                    </span>
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="font-mono text-xs font-bold text-white truncate">
+                        {item.id} {item.name}
+                      </span>
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                    </div>
+                    <div className="flex items-center justify-between font-mono text-[10px]">
+                      <span className="text-gray-500">{item.orbit}</span>
+                      <span style={{ color: item.color }}>{item.status}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between font-mono text-[10px]">
-                    <span className="text-gray-500">{item.orbit}</span>
-                    <span style={{ color: item.color }}>{item.status}</span>
-                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const satObj = { satelliteId: item.id, name: item.name, orbitType: item.orbit, status: item.status };
+                      openDetailModal(satObj);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-[#00F0FF] hover:bg-gray-800 rounded transition-colors ml-2 shrink-0"
+                    title={`Inspect ${item.name} Details`}
+                  >
+                    <Eye size={13} />
+                  </button>
                 </div>
               ))
             )}
@@ -299,10 +348,22 @@ export default function Communications() {
               </p>
             </div>
 
-            <span className="px-2.5 py-1 rounded bg-[#00FF66]/10 border border-[#00FF66]/30 text-[#00FF66] font-mono text-[10px] font-bold tracking-widest uppercase flex items-center space-x-1.5 shadow-[0_0_10px_rgba(0,255,102,0.1)]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-pulse"></span>
-              <span>SECURE LINK</span>
-            </span>
+            <div className="flex items-center space-x-2">
+              <button
+                id="comm-inspect-specs-btn"
+                onClick={() => openDetailModal(currentSat)}
+                className="px-2.5 py-1 rounded bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] font-mono text-[10px] font-bold tracking-widest uppercase flex items-center space-x-1.5 transition-colors shadow-sm"
+                title="Inspect Satellite Details"
+              >
+                <Eye size={12} />
+                <span>SPECS</span>
+              </button>
+
+              <span className="px-2.5 py-1 rounded bg-[#00FF66]/10 border border-[#00FF66]/30 text-[#00FF66] font-mono text-[10px] font-bold tracking-widest uppercase flex items-center space-x-1.5 shadow-[0_0_10px_rgba(0,255,102,0.1)]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-pulse"></span>
+                <span>SECURE LINK</span>
+              </span>
+            </div>
           </div>
 
           {/* Terminal Scroll Content */}

@@ -106,7 +106,7 @@ export default function SatelliteDetail() {
         </Link>
 
         {/* 3D View Link */}
-        <Link to="/orbital" className="group bg-[#0B1221] border border-gray-800 hover:border-[#FFB000]/50 rounded-lg p-6 flex flex-col items-center justify-center text-center transition-all hover:bg-[#FFB000]/5">
+        <Link to="/orbit" className="group bg-[#0B1221] border border-gray-800 hover:border-[#FFB000]/50 rounded-lg p-6 flex flex-col items-center justify-center text-center transition-all hover:bg-[#FFB000]/5">
           <div className="bg-[#FFB000]/10 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform">
             <Globe size={28} className="text-[#FFB000]" />
           </div>

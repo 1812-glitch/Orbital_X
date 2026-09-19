@@ -11,16 +11,21 @@ import {
   PlusCircle, 
   CheckCheck,
   Filter,
-  Layers
+  Layers,
+  Satellite,
+  Eye
 } from 'lucide-react';
 import notificationService from '../../services/notificationService';
+import { useSatellite } from '../../context/SatelliteContext';
 import { format, isToday, isYesterday } from 'date-fns';
 
 export default function NotificationCenter() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL'); // ALL, UNREAD, ALERT, COMMS, SYSTEM
+  const [satFilter, setSatFilter] = useState('ALL');
   const [isTriggering, setIsTriggering] = useState(false);
+  const { satellites, selectSatellite, openDetailModal } = useSatellite();
 
   useEffect(() => {
     fetchNotifications();
@@ -113,11 +118,21 @@ export default function NotificationCenter() {
 
   const getFilteredNotifications = () => {
     return notifications.filter(notif => {
-      if (filter === 'UNREAD') return !notif.read;
-      if (filter === 'ALERT') return notif.type === 'ALERT';
-      if (filter === 'COMMS') return notif.type === 'COMMS';
-      if (filter === 'SYSTEM') return notif.type === 'SYSTEM';
-      return true; // ALL
+      if (filter === 'UNREAD' && notif.read) return false;
+      if (filter === 'ALERT' && notif.type !== 'ALERT') return false;
+      if (filter === 'COMMS' && notif.type !== 'COMMS') return false;
+      if (filter === 'SYSTEM' && notif.type !== 'SYSTEM') return false;
+
+      if (satFilter !== 'ALL') {
+        const text = `${notif.title} ${notif.message}`.toLowerCase();
+        const target = satellites.find(s => s._id === satFilter || s.satelliteId === satFilter);
+        if (target) {
+          const idMatch = target.satelliteId && text.includes(target.satelliteId.toLowerCase());
+          const nameMatch = target.name && text.includes(target.name.toLowerCase());
+          if (!idMatch && !nameMatch) return false;
+        }
+      }
+      return true;
     });
   };
 
@@ -201,6 +216,31 @@ export default function NotificationCenter() {
                         NEW
                       </span>
                     )}
+
+                    {/* Check if this notification refers to a fleet satellite */}
+                    {(() => {
+                      const matchedSat = satellites.find(s => {
+                        const text = `${notif.title} ${notif.message}`.toLowerCase();
+                        const idMatch = s.satelliteId && text.includes(s.satelliteId.toLowerCase());
+                        const nameMatch = s.name && text.includes(s.name.toLowerCase());
+                        return idMatch || nameMatch;
+                      });
+                      if (!matchedSat) return null;
+                      return (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectSatellite(matchedSat);
+                            openDetailModal(matchedSat);
+                          }}
+                          className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 text-[#00F0FF] border border-[#00F0FF]/40 transition-colors shadow-sm ml-1"
+                          title={`Inspect ${matchedSat.name} Details`}
+                        >
+                          <Eye size={10} />
+                          <span>{matchedSat.name}</span>
+                        </button>
+                      );
+                    })()}
                   </div>
                   <p className="text-gray-400 text-xs font-sans leading-relaxed break-words">
                     {notif.message}
@@ -323,6 +363,30 @@ export default function NotificationCenter() {
             </span>
           </button>
         ))}
+
+        {/* Satellite Asset Filter */}
+        <div className="ml-auto flex items-center space-x-2">
+          <Satellite size={13} className="text-[#00F0FF]" />
+          <select
+            id="notif-satellite-filter"
+            value={satFilter}
+            onChange={(e) => {
+              setSatFilter(e.target.value);
+              if (e.target.value !== 'ALL') {
+                const found = satellites.find(s => s._id === e.target.value || s.satelliteId === e.target.value);
+                if (found) selectSatellite(found);
+              }
+            }}
+            className="bg-[#0B1221] border border-gray-800 hover:border-gray-700 rounded px-2.5 py-1.5 text-xs font-mono font-bold text-gray-200 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer"
+          >
+            <option value="ALL">ALL ASSETS</option>
+            {satellites.map(s => (
+              <option key={s._id || s.satelliteId} value={s._id || s.satelliteId}>
+                {s.name || s.satelliteId}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Feed */}
