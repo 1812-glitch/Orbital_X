@@ -16,8 +16,10 @@ export default function AlertsIncidents() {
   // Filters
   const [search, setSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
-  const [satelliteFilter, setSatelliteFilter] = useState('ALL');
+  const [satelliteFilter, setSatelliteFilter] = useState(null); // NULL by default: require selecting a CubeSat
   const [statusFilter, setStatusFilter] = useState('ACTIVE');
+  const [fleetSearch, setFleetSearch] = useState('');
+  const [fleetFilterType, setFleetFilterType] = useState('ALL'); // ALL, CRITICAL, WARNING, NOMINAL
 
   useEffect(() => {
     fetchData();
@@ -98,23 +100,32 @@ export default function AlertsIncidents() {
 
   // Combine API satellites with any discovered from alerts or fallbacks
   const fleetList = useMemo(() => {
-    if (satellites && satellites.length > 0) return satellites;
+    const list = [...(satellites || [])];
+    alerts.forEach(a => {
+      const sat = a.satelliteId;
+      if (sat && typeof sat === 'object') {
+        if (!list.some(s => s._id === sat._id || s.satelliteId === sat.satelliteId)) {
+          list.push(sat);
+        }
+      }
+    });
+    if (list.length > 0) return list;
     return [
-      { _id: '1', satelliteId: 'SAT-001', name: 'ORION' },
-      { _id: '2', satelliteId: 'SAT-002', name: 'NOVA' },
-      { _id: '3', satelliteId: 'SAT-003', name: 'AURORA' },
-      { _id: '4', satelliteId: 'SAT-004', name: 'VANGUARD' },
-      { _id: '5', satelliteId: 'CUBE-01', name: 'ALPHA-SAT' }
+      { _id: '1', satelliteId: 'SAT-001', name: 'ORION', type: 'CubeSat 3U', orbitType: 'LEO-POLAR' },
+      { _id: '2', satelliteId: 'SAT-002', name: 'NOVA', type: 'CubeSat 6U', orbitType: 'MEO-EQ' },
+      { _id: '3', satelliteId: 'SAT-003', name: 'AURORA', type: 'CubeSat 12U', orbitType: 'GEO-SYNC' },
+      { _id: '4', satelliteId: 'SAT-004', name: 'VANGUARD', type: 'CubeSat 3U', orbitType: 'LEO-SSO' },
+      { _id: '5', satelliteId: 'CUBE-01', name: 'ALPHA-SAT', type: 'CubeSat 1U', orbitType: 'LEO-500KM' }
     ];
-  }, [satellites]);
+  }, [satellites, alerts]);
 
-  // Compute alert counts per satellite
+  // Compute alert counts and recent alert preview per satellite
   const satAlertStats = useMemo(() => {
     const statsMap = {};
     fleetList.forEach(sat => {
-      statsMap[sat._id] = { total: 0, critical: 0, warning: 0 };
+      statsMap[sat._id] = { total: 0, critical: 0, warning: 0, latestAlert: null };
       if (sat.satelliteId) {
-        statsMap[sat.satelliteId] = { total: 0, critical: 0, warning: 0 };
+        statsMap[sat.satelliteId] = { total: 0, critical: 0, warning: 0, latestAlert: null };
       }
     });
 
@@ -126,22 +137,28 @@ export default function AlertsIncidents() {
 
       [id1, id2].filter(Boolean).forEach(key => {
         if (!statsMap[key]) {
-          statsMap[key] = { total: 0, critical: 0, warning: 0 };
+          statsMap[key] = { total: 0, critical: 0, warning: 0, latestAlert: null };
         }
         statsMap[key].total += 1;
         if (a.severity === 'CRITICAL') statsMap[key].critical += 1;
         if (a.severity === 'WARNING') statsMap[key].warning += 1;
+        if (!statsMap[key].latestAlert) {
+          statsMap[key].latestAlert = a;
+        }
       });
     });
 
     return statsMap;
   }, [fleetList, alerts]);
 
-  // Active satellite display name for indicator
+  // Active satellite display object
   const activeSat = fleetList.find(s => s._id === satelliteFilter || s.satelliteId === satelliteFilter);
   const activeSatName = activeSat ? (activeSat.name ? `${activeSat.name} (${activeSat.satelliteId})` : activeSat.satelliteId) : satelliteFilter;
 
+  // Filter alerts for the selected CubeSat
   const filteredAlerts = alerts.filter(a => {
+    if (!satelliteFilter) return false; // Do not show alerts if no satellite is selected
+
     const matchesSearch = 
       a.message?.toLowerCase().includes(search.toLowerCase()) || 
       a.type?.toLowerCase().includes(search.toLowerCase()) ||
@@ -150,28 +167,53 @@ export default function AlertsIncidents() {
 
     const satObj = a.satelliteId;
     const matchesSat = 
-      satelliteFilter === 'ALL' || 
-      (satObj && (
+      satObj && (
         satObj === satelliteFilter ||
         satObj._id === satelliteFilter || 
         satObj.satelliteId === satelliteFilter ||
         satObj.name === satelliteFilter
-      ));
+      );
 
     return matchesSearch && matchesSat;
+  });
+
+  // Filter the main CubeSat Fleet grid
+  const filteredFleetList = fleetList.filter(sat => {
+    const key = sat._id || sat.satelliteId;
+    const stat = satAlertStats[key] || { total: 0, critical: 0, warning: 0 };
+    const query = fleetSearch.toLowerCase();
+
+    const matchesQuery = 
+      (sat.name && sat.name.toLowerCase().includes(query)) ||
+      (sat.satelliteId && sat.satelliteId.toLowerCase().includes(query)) ||
+      (sat.orbitType && sat.orbitType.toLowerCase().includes(query)) ||
+      (sat.type && sat.type.toLowerCase().includes(query));
+
+    if (fleetFilterType === 'CRITICAL') return matchesQuery && stat.critical > 0;
+    if (fleetFilterType === 'WARNING') return matchesQuery && stat.warning > 0 && stat.critical === 0;
+    if (fleetFilterType === 'NOMINAL') return matchesQuery && stat.total === 0;
+    return matchesQuery;
   });
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-300">
       
-      {/* 1. Header with Title & Top-Right KPI Cards (Matching Alerts & Incidents.png) */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2">
+      {/* 1. Header with Title & Top-Right KPI Cards */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-gray-800">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight uppercase font-sans">
-            Alerts & Incidents
+          <h1 className="text-3xl font-bold text-white tracking-tight uppercase font-sans flex items-center space-x-3">
+            <span>Alerts & Incidents</span>
+            {satelliteFilter && (
+              <span className="text-xs px-2.5 py-1 rounded font-mono bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 font-bold">
+                CUBESAT ISOLATED
+              </span>
+            )}
           </h1>
           <p className="text-gray-400 font-mono text-xs tracking-wider mt-1">
-            Live monitoring across {satellites.length > 0 ? satellites.length : 42} active assets
+            {satelliteFilter 
+              ? `Inspecting incident logs and telemetry telemetry curves for ${activeSatName}`
+              : `Select a CubeSat below to inspect its active anomalies and telemetry curves`
+            }
           </p>
         </div>
 
@@ -217,14 +259,14 @@ export default function AlertsIncidents() {
             </div>
           </div>
 
-          {/* TOTAL (24H) */}
+          {/* ASSETS MONITORED */}
           <div className="bg-[#0B1221] border border-gray-700 px-4 py-2.5 rounded min-w-[100px]">
             <span className="text-gray-400 font-mono text-[10px] tracking-widest uppercase block">
-              TOTAL (24H)
+              ASSETS MONITORED
             </span>
             <div className="mt-0.5">
               <span className="text-2xl font-bold text-white font-mono leading-none">
-                {stats.total24h.toString().padStart(2, '0')}
+                {fleetList.length.toString().padStart(2, '0')}
               </span>
             </div>
           </div>
@@ -232,206 +274,372 @@ export default function AlertsIncidents() {
         </div>
       </div>
 
-      {/* 2. SEE SATELLITE ONLY - QUICK SELECTOR SHELF WITH COLOURED CIRCLES & COUNTS */}
-      <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-3.5 space-y-3 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="w-5 h-5 rounded bg-[#00F0FF]/15 border border-[#00F0FF]/30 flex items-center justify-center">
-              <Satellite size={12} className="text-[#00F0FF]" />
+      {/* ========================================================================= */}
+      {/* SCENARIO A: NO CUBESAT SELECTED -> SHOW MAIN CUBESAT LIST WITH ALERT BADGES */}
+      {/* ========================================================================= */}
+      {!satelliteFilter ? (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          
+          {/* Instructions and Fleet Search / Filter Bar */}
+          <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-3 w-full md:w-auto">
+              <div className="w-8 h-8 rounded bg-[#00F0FF]/15 border border-[#00F0FF]/40 flex items-center justify-center shrink-0">
+                <Satellite size={16} className="text-[#00F0FF]" />
+              </div>
+              <div>
+                <h3 className="font-mono text-sm font-bold text-white uppercase tracking-wider">
+                  CUBESAT INCIDENT DECK
+                </h3>
+                <p className="text-xs text-gray-400 font-mono">
+                  Select an asset to inspect live telemetry anomalies & incident logs
+                </p>
+              </div>
             </div>
-            <span className="font-mono text-xs font-bold text-white uppercase tracking-wider">
-              SEE SATELLITE ONLY:
-            </span>
-            <span className="text-[10px] font-mono text-gray-400 hidden sm:inline">
-              (Filter to isolate specific satellite telemetry & incidents)
-            </span>
+
+            {/* Filter controls */}
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto font-mono text-xs">
+              
+              {/* Fleet search */}
+              <div className="relative flex-1 md:w-56">
+                <Search size={13} className="absolute left-3 top-2.5 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search CubeSat name / ID..."
+                  value={fleetSearch}
+                  onChange={(e) => setFleetSearch(e.target.value)}
+                  className="w-full bg-[#050810] border border-gray-800 rounded pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 font-mono"
+                />
+              </div>
+
+              {/* Status Filter buttons */}
+              {[
+                { key: 'ALL', label: 'ALL ASSETS' },
+                { key: 'CRITICAL', label: 'CRITICAL' },
+                { key: 'WARNING', label: 'WARNINGS' },
+                { key: 'NOMINAL', label: 'NOMINAL' }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setFleetFilterType(tab.key)}
+                  className={`px-3 py-1.5 rounded transition-all font-bold ${
+                    fleetFilterType === tab.key
+                      ? 'bg-[#00F0FF] text-[#0A0F1F] shadow-[0_0_10px_rgba(0,240,255,0.2)]'
+                      : 'bg-[#050810] border border-gray-800 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+
+            </div>
           </div>
 
-          {satelliteFilter !== 'ALL' && (
-            <button
-              onClick={() => setSatelliteFilter('ALL')}
-              className="text-[11px] font-mono text-[#00F0FF] hover:underline font-bold"
-            >
-              ✕ SHOW ALL SATELLITES
-            </button>
-          )}
-        </div>
+          {/* Fleet Grid: List of CubeSats with Colored Alert Badges */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredFleetList.map(sat => {
+              const satKey = sat._id || sat.satelliteId;
+              const stat = satAlertStats[satKey] || { total: 0, critical: 0, warning: 0, latestAlert: null };
+              const hasCritical = stat.critical > 0;
+              const hasWarning = stat.warning > 0;
+              const isNominal = stat.total === 0;
 
-        {/* Horizontal Scrolling Chips Row */}
-        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 font-mono text-xs scrollbar-thin">
-          {/* ALL FLEET button */}
-          <button
-            onClick={() => setSatelliteFilter('ALL')}
-            className={`px-3 py-1.5 rounded border transition-all flex items-center space-x-2 shrink-0 ${
-              satelliteFilter === 'ALL'
-                ? 'bg-[#00F0FF]/20 border-[#00F0FF] text-white shadow-[0_0_12px_rgba(0,240,255,0.25)] ring-1 ring-[#00F0FF]/50'
-                : 'bg-[#050810] border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
-            }`}
-          >
-            <span className="font-bold">ALL FLEET</span>
-            <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-gray-700 text-white">
-              {alerts.length}
-            </span>
-          </button>
+              // Border and glow based on status
+              const cardBorder = hasCritical 
+                ? 'border-[#FF2A2A]/70 hover:border-[#FF2A2A] shadow-[0_0_20px_rgba(255,42,42,0.15)]' 
+                : hasWarning 
+                ? 'border-[#FFB000]/70 hover:border-[#FFB000] shadow-[0_0_15px_rgba(255,176,0,0.12)]' 
+                : 'border-gray-800 hover:border-[#00FF66]/60 shadow-md';
 
-          {/* Individual Satellite Buttons with Colored Circle & Count */}
-          {fleetList.map(sat => {
-            const satKey = sat._id || sat.satelliteId;
-            const isSelected = satelliteFilter === sat._id || satelliteFilter === sat.satelliteId;
-            const stat = satAlertStats[satKey] || { total: 0, critical: 0, warning: 0 };
-            
-            // Colored circle logic based on alert severity and count
-            let circleStyle = "bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/40";
-            if (stat.critical > 0) {
-              circleStyle = "bg-[#FF2A2A] text-white shadow-[0_0_8px_rgba(255,42,42,0.7)] animate-pulse";
-            } else if (stat.warning > 0) {
-              circleStyle = "bg-[#FFB000] text-black font-bold shadow-[0_0_6px_rgba(255,176,0,0.6)]";
-            } else if (stat.total > 0) {
-              circleStyle = "bg-[#00F0FF] text-[#0A0F1F] font-bold";
-            }
-
-            return (
-              <button
-                key={satKey}
-                onClick={() => {
-                  if (isSelected) {
-                    setSatelliteFilter('ALL');
-                  } else {
+              return (
+                <div
+                  key={satKey}
+                  onClick={() => {
                     setSatelliteFilter(sat._id || sat.satelliteId);
                     selectSatellite(sat);
+                  }}
+                  className={`bg-[#0A0F1F] rounded-lg border p-5 transition-all duration-200 cursor-pointer flex flex-col justify-between group hover:scale-[1.01] ${cardBorder}`}
+                >
+                  <div>
+                    {/* Header: ID, Name & Colored Circle Count Badge */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded bg-[#121C36] border border-gray-700 flex items-center justify-center shrink-0 group-hover:border-[#00F0FF] transition-colors">
+                          <Satellite size={20} className={hasCritical ? 'text-[#FF2A2A]' : hasWarning ? 'text-[#FFB000]' : 'text-[#00FF66]'} />
+                        </div>
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="font-mono font-bold text-white text-base tracking-wider group-hover:text-[#00F0FF] transition-colors">
+                              {sat.name || sat.satelliteId}
+                            </h3>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-gray-800 text-gray-400 border border-gray-700">
+                              {sat.type || 'CubeSat'}
+                            </span>
+                          </div>
+                          <p className="font-mono text-xs text-gray-500 mt-0.5">
+                            {sat.satelliteId} • {sat.orbitType || 'LEO'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* PROMINENT COLORED CIRCLE WITH NUMBER INDICATING HOW MANY ALERTS */}
+                      <div className="flex flex-col items-end">
+                        {hasCritical ? (
+                          <div className="flex items-center space-x-1.5 bg-[#FF2A2A]/15 border border-[#FF2A2A]/40 px-2.5 py-1 rounded-full">
+                            <span className="w-6 h-6 rounded-full bg-[#FF2A2A] text-white font-mono font-bold text-xs flex items-center justify-center shadow-[0_0_10px_rgba(255,42,42,0.8)] animate-pulse">
+                              {stat.total}
+                            </span>
+                            <span className="font-mono text-[10px] text-[#FF2A2A] font-bold uppercase tracking-wider">
+                              ALERTS
+                            </span>
+                          </div>
+                        ) : hasWarning ? (
+                          <div className="flex items-center space-x-1.5 bg-[#FFB000]/15 border border-[#FFB000]/40 px-2.5 py-1 rounded-full">
+                            <span className="w-6 h-6 rounded-full bg-[#FFB000] text-black font-mono font-bold text-xs flex items-center justify-center shadow-[0_0_8px_rgba(255,176,0,0.6)]">
+                              {stat.total}
+                            </span>
+                            <span className="font-mono text-[10px] text-[#FFB000] font-bold uppercase tracking-wider">
+                              WARNINGS
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-1.5 bg-[#00FF66]/10 border border-[#00FF66]/30 px-2.5 py-1 rounded-full">
+                            <span className="w-6 h-6 rounded-full bg-[#00FF66]/20 border border-[#00FF66]/40 text-[#00FF66] font-mono font-bold text-xs flex items-center justify-center">
+                              0
+                            </span>
+                            <span className="font-mono text-[10px] text-[#00FF66] font-bold uppercase tracking-wider">
+                              NOMINAL
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Breakdown Badges */}
+                    <div className="grid grid-cols-2 gap-2 my-3.5 font-mono text-[11px]">
+                      <div className="bg-[#050810] border border-gray-800 rounded p-2 flex items-center justify-between">
+                        <span className="text-gray-500">Critical:</span>
+                        <span className={`font-bold ${stat.critical > 0 ? 'text-[#FF2A2A]' : 'text-gray-400'}`}>
+                          {stat.critical}
+                        </span>
+                      </div>
+                      <div className="bg-[#050810] border border-gray-800 rounded p-2 flex items-center justify-between">
+                        <span className="text-gray-500">Warnings:</span>
+                        <span className={`font-bold ${stat.warning > 0 ? 'text-[#FFB000]' : 'text-gray-400'}`}>
+                          {stat.warning}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Latest Incident Snippet */}
+                    <div className="bg-[#070B14] border border-gray-800/80 rounded p-2.5 mb-4 font-mono text-xs">
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">
+                        LATEST TELEMETRY STATE:
+                      </span>
+                      {stat.latestAlert ? (
+                        <p className="text-gray-300 truncate text-[11px] flex items-center space-x-1">
+                          <span className={stat.latestAlert.severity === 'CRITICAL' ? 'text-[#FF2A2A]' : 'text-[#FFB000]'}>
+                            ●
+                          </span>
+                          <span className="font-bold text-white truncate">
+                            {stat.latestAlert.type || stat.latestAlert.message}:
+                          </span>
+                          <span className="text-gray-400 truncate">
+                            {stat.latestAlert.message}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-[#00FF66] text-[11px] flex items-center space-x-1">
+                          <span>✓</span>
+                          <span>All orbital subsystems nominal. No incidents.</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Selection Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSatelliteFilter(sat._id || sat.satelliteId);
+                      selectSatellite(sat);
+                    }}
+                    className={`w-full py-2.5 rounded font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
+                      hasCritical
+                        ? 'bg-[#FF2A2A]/20 hover:bg-[#FF2A2A] text-white border border-[#FF2A2A]/50 hover:border-[#FF2A2A]'
+                        : hasWarning
+                        ? 'bg-[#FFB000]/20 hover:bg-[#FFB000] text-[#FFB000] hover:text-black border border-[#FFB000]/50 hover:border-[#FFB000]'
+                        : 'bg-[#00F0FF]/15 hover:bg-[#00F0FF] text-[#00F0FF] hover:text-[#0A0F1F] border border-[#00F0FF]/40'
+                    }`}
+                  >
+                    <span>SELECT CUBESAT TO VIEW ALERTS ({stat.total})</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {filteredFleetList.length === 0 && (
+            <div className="py-16 text-center bg-[#0B1221] border border-gray-800 rounded-lg font-mono">
+              <p className="text-gray-400 text-sm">No CubeSats match your search query "{fleetSearch}"</p>
+              <button
+                onClick={() => { setFleetSearch(''); setFleetFilterType('ALL'); }}
+                className="mt-3 text-xs text-[#00F0FF] underline font-bold"
+              >
+                Clear Search & Filters
+              </button>
+            </div>
+          )}
+
+        </div>
+      ) : (
+        /* ========================================================================= */
+        /* SCENARIO B: CUBESAT SELECTED -> SHOW INCIDENTS FOR THIS CUBESAT ONLY     */
+        /* ========================================================================= */
+        <div className="space-y-6 animate-in fade-in duration-300">
+          
+          {/* Active CubeSat Header Bar with Navigation Back Button */}
+          <div className="bg-[#0B1221] border border-[#00F0FF]/40 rounded-lg p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[0_0_20px_rgba(0,240,255,0.1)]">
+            
+            <div className="flex items-center space-x-4 w-full md:w-auto">
+              <button
+                onClick={() => setSatelliteFilter(null)}
+                className="px-3.5 py-2 rounded bg-[#12192b] hover:bg-[#1c2642] border border-gray-700 hover:border-[#00F0FF] text-[#00F0FF] font-mono text-xs font-bold tracking-wider uppercase transition-all flex items-center space-x-1.5 shadow-sm"
+              >
+                <span>← BACK TO ALL CUBESATS</span>
+              </button>
+
+              <div className="border-l border-gray-800 pl-4">
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono text-sm font-bold text-white">
+                    {activeSatName}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40">
+                    {activeSat?.type || 'CubeSat'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 font-mono">
+                  {filteredAlerts.length} active incident(s) reported for this asset
+                </p>
+              </div>
+            </div>
+
+            {/* CubeSat Quick Switcher */}
+            <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
+              <span className="text-xs font-mono text-gray-400 uppercase tracking-wider hidden sm:inline">
+                SWITCH CUBESAT:
+              </span>
+              <select
+                value={satelliteFilter}
+                onChange={(e) => {
+                  if (e.target.value === 'ALL') {
+                    setSatelliteFilter(null);
+                  } else {
+                    setSatelliteFilter(e.target.value);
+                    const found = fleetList.find(s => s._id === e.target.value || s.satelliteId === e.target.value);
+                    if (found) selectSatellite(found);
                   }
                 }}
-                className={`px-3 py-1.5 rounded border transition-all flex items-center space-x-2 shrink-0 group ${
-                  isSelected
-                    ? 'bg-[#00F0FF]/20 border-[#00F0FF] text-white shadow-[0_0_15px_rgba(0,240,255,0.25)] ring-1 ring-[#00F0FF]'
-                    : 'bg-[#050810] border-gray-800 text-gray-300 hover:text-white hover:border-gray-700'
-                }`}
-                title={`Filter alerts for ${sat.name || sat.satelliteId}`}
+                className="bg-[#050810] border border-gray-700 hover:border-[#00F0FF] rounded px-3 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-[#00F0FF] cursor-pointer"
               >
-                <span className="font-bold truncate max-w-[130px] group-hover:text-[#00F0FF] transition-colors">
-                  {sat.name || sat.satelliteId}
-                </span>
+                <option value="ALL">← RETURN TO ALL CUBESATS</option>
+                {fleetList.map(sat => {
+                  const key = sat._id || sat.satelliteId;
+                  const stat = satAlertStats[key] || { total: 0 };
+                  return (
+                    <option key={key} value={key}>
+                      {sat.name || sat.satelliteId} ({stat.total} alerts)
+                    </option>
+                  );
+                })}
+              </select>
 
-                {/* Colored circle with count number */}
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${circleStyle}`}>
-                  {stat.total}
-                </span>
+              <button
+                onClick={() => {
+                  if (activeSat) openDetailModal(activeSat);
+                }}
+                className="p-2 border border-gray-700 hover:border-[#00F0FF] rounded bg-[#050810] text-[#00F0FF] hover:text-white transition-colors"
+                title="Inspect Satellite Specs"
+              >
+                <Eye size={15} />
               </button>
-            );
-          })}
-        </div>
-
-        {/* Active Satellite Filter Banner */}
-        {satelliteFilter !== 'ALL' && (
-          <div className="bg-[#00F0FF]/10 border border-[#00F0FF]/30 rounded px-3 py-1.5 flex items-center justify-between text-xs font-mono text-[#00F0FF]">
-            <div className="flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-[#00F0FF] animate-ping"></span>
-              <span>
-                SEEING SATELLITE ONLY: <strong className="text-white underline">{activeSatName}</strong> ({filteredAlerts.length} incidents reported)
-              </span>
             </div>
-            <button
-              onClick={() => setSatelliteFilter('ALL')}
-              className="px-2.5 py-0.5 rounded bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 text-white font-bold transition-colors"
-            >
-              Reset to All
-            </button>
+
           </div>
-        )}
-      </div>
 
-      {/* 3. Filter Bar with Search, Severity, Sat, Status & Filter Button */}
-      <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-3 flex flex-col md:flex-row items-center gap-3">
-        
-        {/* Search Input */}
-        <div className="flex-1 w-full relative">
-          <Search className="absolute left-3.5 top-2.5 text-gray-500" size={15} />
-          <input 
-            type="text" 
-            placeholder="Search alerts, IDs, or values..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-[#050810] border border-gray-800 rounded pl-10 pr-4 py-2 text-xs text-white font-mono placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 transition-colors"
-          />
-        </div>
-
-        {/* Dropdowns */}
-        <div className="flex items-center space-x-2 w-full md:w-auto font-mono text-xs">
-          
-          {/* Severity Dropdown */}
-          <select 
-            value={severityFilter} 
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            className="bg-[#050810] border border-gray-800 rounded px-3 py-2 text-gray-300 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer"
-          >
-            <option value="ALL">SEVERITY: ALL</option>
-            <option value="CRITICAL">CRITICAL</option>
-            <option value="WARNING">WARNING</option>
-          </select>
-
-          {/* Satellite Filter Dropdown (Enhanced with Names) */}
-          <select 
-            value={satelliteFilter} 
-            onChange={(e) => {
-              setSatelliteFilter(e.target.value);
-              if (e.target.value !== 'ALL') {
-                const found = satellites.find(s => s._id === e.target.value || s.satelliteId === e.target.value);
-                if (found) selectSatellite(found);
-              }
-            }}
-            className="bg-[#050810] border border-gray-800 rounded px-3 py-2 text-gray-300 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer font-bold"
-          >
-            <option value="ALL">ALL SATELLITES</option>
-            {satellites.map(sat => (
-              <option key={sat._id} value={sat._id}>
-                {sat.name ? `${sat.name} (${sat.satelliteId})` : sat.satelliteId}
-              </option>
-            ))}
-          </select>
-
-          {/* Status Dropdown */}
-          <select 
-            value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-[#050810] border border-gray-800 rounded px-3 py-2 text-gray-300 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer"
-          >
-            <option value="ACTIVE">STATUS: ACTIVE</option>
-            <option value="RESOLVED">STATUS: RESOLVED</option>
-            <option value="ALL">STATUS: ALL</option>
-          </select>
-
-          {/* Filter icon action button */}
-          <button 
-            onClick={() => {
-              setSearch('');
-              setSeverityFilter('ALL');
-              setSatelliteFilter('ALL');
-              setStatusFilter('ACTIVE');
-            }}
-            title="Reset Filters"
-            className="p-2 border border-gray-800 rounded bg-[#050810] text-gray-400 hover:text-[#00F0FF] hover:border-[#00F0FF]/50 transition-colors"
-          >
-            <Filter size={15} />
-          </button>
-        </div>
-
-      </div>
-
-      {/* 3. Alerts Feed Cards (Matching Alerts & Incidents.png) */}
-      <div className="space-y-6">
-        {loading ? (
-          <div className="text-[#00F0FF] font-mono text-center py-12 tracking-widest animate-pulse">
-            SCANNING TELEMETRY ANOMALIES...
-          </div>
-        ) : filteredAlerts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-[#0B1221] border border-gray-800 rounded-lg h-64 mt-4">
-            <div className="w-12 h-12 rounded-full border border-gray-700 flex items-center justify-center mb-4">
-              <CheckCircle size={24} className="text-gray-500" />
+          {/* Sub-Filters for this CubeSat */}
+          <div className="bg-[#0B1221] border border-gray-800 rounded-lg p-3 flex flex-col md:flex-row items-center gap-3">
+            
+            {/* Search Input */}
+            <div className="flex-1 w-full relative">
+              <Search className="absolute left-3.5 top-2.5 text-gray-500" size={15} />
+              <input 
+                type="text" 
+                placeholder={`Search ${activeSat?.name || 'CubeSat'} alerts, metrics, or anomaly details...`}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-[#050810] border border-gray-800 rounded pl-10 pr-4 py-2 text-xs text-white font-mono placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 transition-colors"
+              />
             </div>
-            <h3 className="text-gray-300 mb-1 font-medium font-mono text-sm">No active incidents</h3>
-            <p className="text-[#00FF66] font-mono text-xs">All systems nominal.</p>
+
+            {/* Severity and Status Dropdowns */}
+            <div className="flex items-center space-x-2 w-full md:w-auto font-mono text-xs">
+              <select 
+                value={severityFilter} 
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="bg-[#050810] border border-gray-800 rounded px-3 py-2 text-gray-300 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer font-bold"
+              >
+                <option value="ALL">SEVERITY: ALL</option>
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="WARNING">WARNING</option>
+              </select>
+
+              <select 
+                value={statusFilter} 
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-[#050810] border border-gray-800 rounded px-3 py-2 text-gray-300 focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer"
+              >
+                <option value="ACTIVE">STATUS: ACTIVE</option>
+                <option value="RESOLVED">STATUS: RESOLVED</option>
+                <option value="ALL">STATUS: ALL</option>
+              </select>
+
+              <button 
+                onClick={() => {
+                  setSearch('');
+                  setSeverityFilter('ALL');
+                  setStatusFilter('ACTIVE');
+                }}
+                title="Reset Filters"
+                className="p-2 border border-gray-800 rounded bg-[#050810] text-gray-400 hover:text-[#00F0FF] hover:border-[#00F0FF]/50 transition-colors"
+              >
+                <Filter size={15} />
+              </button>
+            </div>
+
           </div>
-        ) : (
+
+          {/* Incident Feed Cards for this CubeSat */}
+          <div className="space-y-6">
+            {loading ? (
+              <div className="text-[#00F0FF] font-mono text-center py-12 tracking-widest animate-pulse">
+                RETRIEVING CUBESAT TELEMETRY ANOMALIES...
+              </div>
+            ) : filteredAlerts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 bg-[#0B1221] border border-gray-800 rounded-lg mt-4">
+                <div className="w-12 h-12 rounded-full border border-gray-700 flex items-center justify-center mb-4 bg-[#00FF66]/10 border-[#00FF66]/30">
+                  <CheckCircle size={24} className="text-[#00FF66]" />
+                </div>
+                <h3 className="text-white mb-1 font-bold font-mono text-sm">All systems nominal for {activeSatName}</h3>
+                <p className="text-gray-400 font-mono text-xs mb-4">No active incidents matching your filter criteria.</p>
+                <button
+                  onClick={() => setSatelliteFilter(null)}
+                  className="px-4 py-2 rounded bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] font-mono text-xs font-bold uppercase transition-colors"
+                >
+                  ← Return to CubeSat Fleet
+                </button>
+              </div>
+            ) : (
           filteredAlerts.map(alert => {
             const isCritical = alert.severity === 'CRITICAL';
             const isWarning = alert.severity === 'WARNING';
@@ -618,6 +826,9 @@ export default function AlertsIncidents() {
           })
         )}
       </div>
+
+        </div>
+      )}
 
     </div>
   );
