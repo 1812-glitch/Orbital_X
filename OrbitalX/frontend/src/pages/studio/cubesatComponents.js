@@ -12,26 +12,80 @@ export const FORM_FACTORS = {
   '1U': {
     name: '1U',
     dimensions: '10x10x10 cm',
-    maxMass: 1338, // grams
+    grid: '1x1x1',
+    maxMass: 1338, // grams (standard 1.33 kg)
     maxVolume: 1.0, // U
     maxThermal: 15, // Watts
-    heightScale: 1.0
+    unitsX: 1,
+    unitsY: 1,
+    unitsZ: 1,
+    heightScale: 1.0,
+    desc: 'Compact standard single unit for education, beacon transmitters, and technology demonstration.'
   },
   '2U': {
     name: '2U',
     dimensions: '10x10x20 cm',
+    grid: '1x1x2',
     maxMass: 2660,
     maxVolume: 2.0,
     maxThermal: 25,
-    heightScale: 2.0
+    unitsX: 1,
+    unitsY: 2,
+    unitsZ: 1,
+    heightScale: 2.0,
+    desc: 'Double unit bus providing dedicated payload bay and secondary power storage.'
   },
   '3U': {
     name: '3U',
     dimensions: '10x10x30 cm',
+    grid: '1x1x3',
     maxMass: 4000,
     maxVolume: 3.0,
     maxThermal: 35,
-    heightScale: 3.0
+    unitsX: 1,
+    unitsY: 3,
+    unitsZ: 1,
+    heightScale: 3.0,
+    desc: 'Industry workhorse for Earth observation, IoT constellation nodes, and science payloads.'
+  },
+  '6U': {
+    name: '6U',
+    dimensions: '10x20x30 cm',
+    grid: '1x2x3',
+    maxMass: 12000, // 12 kg
+    maxVolume: 6.0,
+    maxThermal: 75,
+    unitsX: 2,
+    unitsY: 3,
+    unitsZ: 1,
+    heightScale: 3.0,
+    desc: 'Dual-column architecture supporting dedicated propulsion, high-gain communications, and heavy payloads.'
+  },
+  '12U': {
+    name: '12U',
+    dimensions: '20x20x30 cm',
+    grid: '2x2x3',
+    maxMass: 24000, // 24 kg
+    maxVolume: 12.0,
+    maxThermal: 130,
+    unitsX: 2,
+    unitsY: 3,
+    unitsZ: 2,
+    heightScale: 3.0,
+    desc: 'Quad-bay deep space platform supporting hyperspectral imaging telescopes and high delta-V electric propulsion.'
+  },
+  '16U': {
+    name: '16U',
+    dimensions: '20x20x40 cm',
+    grid: '2x2x4',
+    maxMass: 36000, // 36 kg
+    maxVolume: 16.0,
+    maxThermal: 180,
+    unitsX: 2,
+    unitsY: 4,
+    unitsZ: 2,
+    heightScale: 4.0,
+    desc: 'Heavyweight interplanetary CubeSat standard with maximum payload aperture, 80Wh+ power bus, and lunar relay capability.'
   }
 };
 
@@ -45,7 +99,7 @@ export const CUBESAT_COMPONENTS = [
     powerCons: 1.0, // W
     powerGen: 0,
     cost: 150,
-    maxCount: 1,
+    maxCount: 2,
     desc: 'Radiation-tolerant ARM Cortex-M7 core with redundant flash telemetry storage.',
     color: '#00F0FF',
     renderType: 'internal_pcb'
@@ -73,7 +127,7 @@ export const CUBESAT_COMPONENTS = [
     powerCons: 3.0,
     powerGen: 0,
     cost: 350,
-    maxCount: 1,
+    maxCount: 2,
     desc: 'High-speed 2 Mbps science data transmitter with RF power amplifier.',
     color: '#0EA5E9',
     renderType: 'rf_box'
@@ -87,7 +141,7 @@ export const CUBESAT_COMPONENTS = [
     powerCons: 1.5,
     powerGen: 0,
     cost: 180,
-    maxCount: 1,
+    maxCount: 2,
     desc: 'Ruggedized transceiver for ground command reception and heartbeat beacons.',
     color: '#2563EB',
     renderType: 'rf_box'
@@ -108,7 +162,7 @@ export const CUBESAT_COMPONENTS = [
   },
   {
     id: 'battery_pack',
-    name: 'Battery Pack',
+    name: 'Battery Pack (20Wh)',
     category: 'Power',
     mass: 250,
     volume: 0.20,
@@ -116,7 +170,7 @@ export const CUBESAT_COMPONENTS = [
     powerGen: 0,
     capacityWh: 20,
     cost: 120,
-    maxCount: 3,
+    maxCount: 6,
     desc: 'Space-qualified Li-Ion battery pack with integrated cell thermal heaters.',
     color: '#F59E0B',
     renderType: 'battery'
@@ -130,8 +184,8 @@ export const CUBESAT_COMPONENTS = [
     powerCons: 0,
     powerGen: 4.0, // +4W in sunlight
     cost: 200,
-    maxCount: 6,
-    desc: 'Triple-junction GaAs solar cell array with 29.5% efficiency.',
+    maxCount: 12,
+    desc: 'Triple-junction GaAs solar cell array for the 2 parallel bus faces (29.5% efficiency).',
     color: '#FBBF24',
     renderType: 'solar_panel'
   },
@@ -144,7 +198,7 @@ export const CUBESAT_COMPONENTS = [
     powerCons: 0.5,
     powerGen: 0,
     cost: 80,
-    maxCount: 1,
+    maxCount: 2,
     desc: 'OEM GNSS receiver module for precision orbital positioning and time-sync.',
     color: '#10B981',
     renderType: 'sensor'
@@ -158,7 +212,7 @@ export const CUBESAT_COMPONENTS = [
     powerCons: 0.1,
     powerGen: 0,
     cost: 30,
-    maxCount: 4,
+    maxCount: 8,
     desc: 'Multi-point platinum RTD sensor array for payload and battery thermal monitoring.',
     color: '#34D399',
     renderType: 'sensor_small'
@@ -166,15 +220,199 @@ export const CUBESAT_COMPONENTS = [
   {
     id: 'reaction_wheel',
     name: 'Reaction Wheel',
-    category: 'Structure',
+    category: 'Avionics',
     mass: 130,
     volume: 0.12,
     powerCons: 0.8,
     powerGen: 0,
     cost: 300,
-    maxCount: 3,
+    maxCount: 4,
     desc: 'Miniature momentum wheel for 3-axis attitude control and nadir pointing.',
     color: '#9CA3AF',
     renderType: 'flywheel'
+  },
+  {
+    id: 'chassis_rails',
+    name: 'Primary Deployer Rails (Al 6061)',
+    category: 'Structure',
+    mass: 140,
+    volume: 0.15,
+    powerCons: 0,
+    powerGen: 0,
+    cost: 180,
+    maxCount: 2,
+    desc: 'Hard-anodized 6061-T6 aluminum guide rails compatible with standardized P-POD and CSD deployers.',
+    color: '#CCA033',
+    renderType: 'structure_rails'
+  },
+  {
+    id: 'solar_wings_deployable',
+    name: 'Deployable Solar Wings (3-Segment)',
+    category: 'Power',
+    mass: 190,
+    volume: 0.25,
+    powerCons: 0,
+    powerGen: 18.0,
+    cost: 450,
+    maxCount: 2,
+    desc: 'Symmetrical 3-segment accordion solar arrays with triple-junction GaAs cells and deployment hinges.',
+    color: '#FBBF24',
+    renderType: 'solar_wings'
+  },
+  {
+    id: 'shear_panels',
+    name: 'Carbon-Composite Side Panels',
+    category: 'Structure',
+    mass: 90,
+    volume: 0.10,
+    powerCons: 0,
+    powerGen: 0,
+    cost: 160,
+    maxCount: 4,
+    desc: 'Rigid honeycomb carbon-fiber shear panels with solar cell cutouts and thermal interfaces.',
+    color: '#475569',
+    renderType: 'shear_panel'
+  },
+  {
+    id: 'separation_springs',
+    name: 'P-POD Separation Plungers',
+    category: 'Structure',
+    mass: 40,
+    volume: 0.05,
+    powerCons: 0,
+    powerGen: 0,
+    cost: 85,
+    maxCount: 2,
+    desc: 'Calibrated spring plunger mechanism with redundant deployment micro-switches.',
+    color: '#EAB308',
+    renderType: 'plunger'
+  },
+  // 6U - 16U High-Capacity Aerospace Components
+  {
+    id: 'star_tracker',
+    name: 'Star Tracker System (Optical Att)',
+    category: 'Avionics',
+    mass: 280,
+    volume: 0.25,
+    powerCons: 1.8,
+    powerGen: 0,
+    cost: 750,
+    maxCount: 2,
+    desc: 'Sub-arcsecond stellar recognition optical sensor with autonomous star pattern matching for high-precision 3-axis pointing.',
+    color: '#38BDF8',
+    renderType: 'star_tracker'
+  },
+  {
+    id: 'reaction_wheel_cluster',
+    name: 'Reaction Wheel Cluster (4-Wheel Pyramid)',
+    category: 'Avionics',
+    mass: 680,
+    volume: 0.65,
+    powerCons: 3.4,
+    powerGen: 0,
+    cost: 980,
+    maxCount: 2,
+    desc: 'High-torque four-wheel pyramid momentum management system designed for agile slewing in 6U, 12U, and 16U buses.',
+    color: '#94A3B8',
+    renderType: 'flywheel_cluster'
+  },
+  {
+    id: 'cold_gas_thruster',
+    name: 'Cold Gas Micro-Propulsion Module',
+    category: 'Payload',
+    mass: 820,
+    volume: 0.60,
+    powerCons: 3.5,
+    powerGen: 0,
+    cost: 820,
+    maxCount: 2,
+    desc: 'Pressurized R-236fa cold gas propellant system with 4 vectoring micro-nozzles for detumble and collision avoidance maneuvers.',
+    color: '#F97316',
+    renderType: 'cold_gas'
+  },
+  {
+    id: 'ion_propulsion_unit',
+    name: 'Miniature Gridded Ion Thruster (EP-16)',
+    category: 'Payload',
+    mass: 1450,
+    volume: 1.20,
+    powerCons: 28.0,
+    powerGen: 0,
+    cost: 1850,
+    maxCount: 2,
+    desc: 'Solid-xenon electric propulsion engine providing 1.2 mN thrust and >2,500s Isp for orbital raising and deep space cruising.',
+    color: '#A855F7',
+    renderType: 'ion_thruster'
+  },
+  {
+    id: 'hyperspectral_payload',
+    name: 'Hyperspectral Imager (400-1000nm)',
+    category: 'Payload',
+    mass: 1950,
+    volume: 2.20,
+    powerCons: 14.5,
+    powerGen: 0,
+    cost: 2200,
+    maxCount: 2,
+    desc: 'Dual-aperture high-resolution optical spectrometer with 64 spectral channels and FPGA telemetry compression.',
+    color: '#EC4899',
+    renderType: 'hyperspectral'
+  },
+  {
+    id: 'xband_highgain_dish',
+    name: 'X-Band High-Gain Parabolic Reflector',
+    category: 'Communications',
+    mass: 420,
+    volume: 0.50,
+    powerCons: 7.5,
+    powerGen: 0,
+    cost: 1100,
+    maxCount: 2,
+    desc: 'Deployable carbon-mesh high-gain parabolic dish for deep-space and high-throughput 50 Mbps science downlinks.',
+    color: '#06B6D4',
+    renderType: 'dish_antenna'
+  },
+  {
+    id: 'battery_heavy_80wh',
+    name: 'High-Capacity Battery Pack (80Wh)',
+    category: 'Power',
+    mass: 780,
+    volume: 0.70,
+    powerCons: 0,
+    powerGen: 0,
+    capacityWh: 80,
+    cost: 480,
+    maxCount: 4,
+    desc: 'Space-rated 8S2P LiFePO4 battery module with autonomous thermal jackets designed for heavy 6U-16U payload operations.',
+    color: '#F59E0B',
+    renderType: 'battery_large'
+  },
+  {
+    id: 'solar_wings_heavy',
+    name: 'Heavy-Duty Quad Deployable Solar Array',
+    category: 'Power',
+    mass: 620,
+    volume: 0.75,
+    powerCons: 0,
+    powerGen: 55.0,
+    cost: 1250,
+    maxCount: 2,
+    desc: 'Extended 4-segment unfolding solar wings generating +55W continuous in sunlight for large-format CubeSats.',
+    color: '#FBBF24',
+    renderType: 'solar_wings_heavy'
+  },
+  {
+    id: 'structural_bulkhead_ribs',
+    name: 'Multi-Bay Structural Partition Ribs',
+    category: 'Structure',
+    mass: 260,
+    volume: 0.20,
+    powerCons: 0,
+    powerGen: 0,
+    cost: 210,
+    maxCount: 4,
+    desc: 'CNC machined aerospace 7075-T6 aluminum bulkhead grid providing structural isolation between payload and bus bays.',
+    color: '#64748B',
+    renderType: 'bulkhead'
   }
 ];
