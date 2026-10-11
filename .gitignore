@@ -56,3 +56,10 @@ $RECYCLE.BIN/
 .tempmediaStorage/
 .system_generated/
 scratch/
+
+# User local scratch & work folders
+FOLDER1/
+FOLDER1
+work/
+Work/
+details

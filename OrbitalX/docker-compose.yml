@@ -1,0 +1,65 @@
+services:
+  # Database Service
+  mongodb:
+    image: mongo:7.0
+    container_name: orbitalx-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: orbitalx
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - orbitalx-net
+
+  # Express Node.js API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: orbitalx-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongodb:27017/orbitalx
+      JWT_SECRET: ${JWT_SECRET:-orbitalx_production_secret_key_change_me}
+      CLIENT_URL: ${CLIENT_URL:-*}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - orbitalx-net
+
+  # React / Nginx Frontend Web Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: orbitalx-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - orbitalx-net
+
+volumes:
+  mongo-data:
+    driver: local
+
+networks:
+  orbitalx-net:
+    driver: bridge

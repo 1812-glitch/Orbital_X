@@ -17,18 +17,24 @@ const alertRoutes = require('./src/routes/alertRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const analyticsRoutes = require('./src/routes/analyticsRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
+const aiRoutes = require('./src/routes/aiRoutes');
 const { startSimulation } = require('./src/services/telemetrySimulator');
 const errorHandler = require('./src/middleware/errorHandler');
 const seedData = require('./src/utils/seedData');
 
+const compression = require('compression');
+
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 
 // Middleware
-app.use(express.json());
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+app.use(compression());
+const clientUrl = process.env.CLIENT_URL;
+const allowedOrigins = clientUrl === '*' ? '*' : clientUrl ? clientUrl.split(',').map(s => s.trim()) : ['http://localhost:3000', 'http://localhost:4173', 'http://localhost:4174', 'http://localhost:5173', 'http://localhost'];
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(helmet());
 app.use(morgan('dev'));
+
 
 // Basic health route
 app.get('/api/health', (req, res) => {
@@ -48,6 +54,7 @@ app.use('/api/alerts', alertRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/ai', aiRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

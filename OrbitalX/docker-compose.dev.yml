@@ -1,0 +1,59 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: orbitalx-mongodb-dev
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data-dev:/data/db
+    networks:
+      - orbitalx-net-dev
+
+  backend:
+    image: node:20-alpine
+    container_name: orbitalx-backend-dev
+    working_dir: /app
+    restart: unless-stopped
+    command: npm run dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      PORT: 4000
+      NODE_ENV: development
+      MONGODB_URI: mongodb://mongodb:27017/orbitalx
+      JWT_SECRET: orbitalx_dev_secret_key
+      CLIENT_URL: http://localhost:5173
+    depends_on:
+      - mongodb
+    networks:
+      - orbitalx-net-dev
+
+  frontend:
+    image: node:20-alpine
+    container_name: orbitalx-frontend-dev
+    working_dir: /app
+    restart: unless-stopped
+    command: npm run dev -- --host
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:4000/api
+    depends_on:
+      - backend
+    networks:
+      - orbitalx-net-dev
+
+volumes:
+  mongo-data-dev:
+    driver: local
+
+networks:
+  orbitalx-net-dev:
+    driver: bridge

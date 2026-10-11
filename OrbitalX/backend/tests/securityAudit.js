@@ -1,7 +1,7 @@
 // OrbitalX Automated Security & RBAC Audit Test Suite
 // Phase 17: Testing + Security Review
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = process.env.API_BASE || 'http://localhost:4000/api';
 
 async function runSecurityAudit() {
   console.log('====================================================');

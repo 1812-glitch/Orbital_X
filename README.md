@@ -68,10 +68,11 @@ Built with a high-contrast cyber-aerospace aesthetic (deep space `#0A0F1F`, lumi
 - Real-time Recharts area/line charts with interactive tooltips and crosshairs.
 - 24-hour fleet health aggregation reports and summary CSV exports.
 
-### 8. ⚠️ Alerts & Incident Management (`/alerts` & `/notifications`)
-- Automated anomaly engine detecting thermal spikes (>90°C), low power drains (<15%), and intermittent dropouts.
-- Dedicated incident cards featuring an embedded **30-minute historical sparkline chart** showing nominal telemetry transitioning into anomaly spikes.
-- Single-click incident acknowledgment (`ACKNOWLEDGED ✓`) and resolution logging.
+### 8. ⚠️ Alerts, Fault Generator & AI Incident Copilot (`/alerts` & `/notifications`)
+- **Aerospace Anomaly & Fault Injection Drawer (`⚡ FAULT GENERATOR & INJECTOR`)**: Interactive sliding side panel with 15+ pre-configured aerospace failure modes across 7 subsystems (EPS, ADCS, COMMS, TCS, OBC, Space Environment, and Payload) plus custom fault creation.
+- **AI Anomaly Diagnosis & Recovery Copilot**: Automated root-cause analysis (RCA), confidence scoring, SOP checklist, and one-click flight telecommand dispatch (`CMD_EPS_SAFE_MODE`, `CMD_ADCS_DETUMBLE_BDOT`, etc.). LLM-ready (Google Gemini, OpenAI, Claude, Ollama).
+- **Dedicated Incident Cards**: Embedded **30-minute historical sparkline chart** showing nominal telemetry transitioning into anomaly spikes with interactive acknowledgment and resolution.
+- 📖 *Full Documentation: [SATELLITE_ANOMALIES_AND_AI_GUIDE.md](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/SATELLITE_ANOMALIES_AND_AI_GUIDE.md)*
 
 ### 9. 🛡️ Admin Hub & Audit Logs (`/admin`, `/admin/users`, `/admin/logs`)
 - Role-Based Access Control (RBAC): `ADMIN`, `OPERATOR`, `ANALYST`, `VIEWER`.
@@ -190,7 +191,7 @@ OrbitalX incorporates defense-in-depth security validated via an automated test 
    ```
    Create `.env` inside `OrbitalX/backend`:
    ```env
-   PORT=5000
+   PORT=4000
    MONGO_URI=mongodb://127.0.0.1:27017/orbitalx
    JWT_SECRET=orbitalx_super_secret_jwt_key_2026_aerospace
    SIMULATION_INTERVAL=10000
@@ -213,14 +214,14 @@ Double-click [`start.bat`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20des
    cd OrbitalX/backend
    npm run dev
    ```
-   *(Starts Express server on `http://localhost:5000` and automatically seeds initial satellites, missions, ground stations, and admin user).*
+   *(Starts Express server on `http://localhost:4000` and automatically seeds initial satellites, missions, ground stations, and admin user).*
 
 2. **Start Frontend Dev Server**:
    ```bash
    cd OrbitalX/frontend
    npm run dev
    ```
-   *(Opens Vite development server on `http://localhost:5173`).*
+   *(Opens Vite development server on `http://localhost:4173`).*
 
 #### Option C: Containerized Docker Deployment
 Run everything with Docker Compose (MongoDB, Backend, and Nginx-powered Frontend):

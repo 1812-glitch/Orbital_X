@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import satelliteService from '../services/satelliteService';
 
 const SatelliteContext = createContext(null);
@@ -46,9 +46,11 @@ export function SatelliteProvider({ children }) {
   }, [refreshSatellites]);
 
   // Find the selected satellite object
-  const selectedSatellite = satellites.find(
-    (s) => s._id === selectedSatelliteId || s.satelliteId === selectedSatelliteId
-  ) || satellites[0] || null;
+  const selectedSatellite = useMemo(() => {
+    return satellites.find(
+      (s) => s._id === selectedSatelliteId || s.satelliteId === selectedSatelliteId
+    ) || satellites[0] || null;
+  }, [satellites, selectedSatelliteId]);
 
   // Select a satellite by object, _id, or satelliteId
   const selectSatellite = useCallback((satOrId) => {
@@ -86,7 +88,7 @@ export function SatelliteProvider({ children }) {
     setModalSatellite(null);
   }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     satellites,
     selectedSatellite,
     selectedSatelliteId,
@@ -98,7 +100,19 @@ export function SatelliteProvider({ children }) {
     refreshSatellites,
     loading,
     error,
-  };
+  }), [
+    satellites,
+    selectedSatellite,
+    selectedSatelliteId,
+    selectSatellite,
+    isDetailModalOpen,
+    modalSatellite,
+    openDetailModal,
+    closeDetailModal,
+    refreshSatellites,
+    loading,
+    error,
+  ]);
 
   return (
     <SatelliteContext.Provider value={value}>

@@ -30,11 +30,14 @@ const seedData = async () => {
         { name: 'Alpha One', satelliteId: 'SAT-ALPHA-1', type: 'COMMUNICATION', orbitType: 'LEO', status: 'ACTIVE', inclination: 51.6, orbitRadius: 6871, orbitSpeed: 7.6 },
         { name: 'Beta Two', satelliteId: 'SAT-BETA-2', type: 'OBSERVATION', orbitType: 'MEO', status: 'ACTIVE', inclination: 55.0, orbitRadius: 26560, orbitSpeed: 3.8 },
         { name: 'Gamma Three', satelliteId: 'SAT-GAMMA-3', type: 'WEATHER', orbitType: 'GEO', status: 'ACTIVE', inclination: 0.1, orbitRadius: 42164, orbitSpeed: 3.1 },
+        { name: 'CubeSat Nano-1', satelliteId: 'CUBESAT-NANO', type: 'CUBESAT_1U', orbitType: 'LEO', status: 'ACTIVE', inclination: 53.0, orbitRadius: 6810, orbitSpeed: 7.64 },
         { name: 'CubeSat Ion-X', satelliteId: 'CUBESAT-ION', type: 'CUBESAT_3U', orbitType: 'LEO', status: 'ACTIVE', inclination: 97.4, orbitRadius: 6920, orbitSpeed: 7.5 },
-        { name: 'CubeSat Aero-6', satelliteId: 'CUBESAT-AERO', type: 'CUBESAT_6U', orbitType: 'LEO', status: 'ACTIVE', inclination: 45.0, orbitRadius: 6890, orbitSpeed: 7.6 }
+        { name: 'CubeSat Aero-6', satelliteId: 'CUBESAT-AERO', type: 'CUBESAT_6U', orbitType: 'LEO', status: 'ACTIVE', inclination: 45.0, orbitRadius: 6890, orbitSpeed: 7.6 },
+        { name: 'CubeSat Terra-12', satelliteId: 'CUBESAT-TERRA', type: 'CUBESAT_12U', orbitType: 'SSO', status: 'ACTIVE', inclination: 98.2, orbitRadius: 6940, orbitSpeed: 7.51 },
+        { name: 'CubeSat Titan-16', satelliteId: 'CUBESAT-TITAN', type: 'CUBESAT_16U', orbitType: 'HEO', status: 'ACTIVE', inclination: 63.4, orbitRadius: 7620, orbitSpeed: 6.84 }
       ];
       const insertedSatellites = await Satellite.insertMany(satellites);
-      console.log('Satellites and CubeSats seeded.');
+      console.log('Satellites and CubeSats (1U-16U) seeded.');
 
       // Create a mission and assign satellites
       await Mission.create({

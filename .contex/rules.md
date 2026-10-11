@@ -36,3 +36,10 @@
 - Use the `browser_subagent` to navigate the UI, capture screenshots, and generate WebP video recordings of the built features.
 - Create and update a `walkthrough.md` artifact showing all work completed in the folder.
 - Embed all screenshots, recordings, and code highlights into the `walkthrough.md` artifact so the progress can be visually and functionally verified.
+
+## 8. Git Multi-Branch & Commit Specifications
+- **MANDATORY:** Always refer to [.contex/git_branching_strategy.md](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/.contex/git_branching_strategy.md) before pulling, branching, staging, or committing.
+- **Branch Hierarchy:** Use `main` (production), `develop` (integration), `developer` (daily development sandbox), `bugfix/*` (targeted issue fixes), `hotfix/*` (urgent patches), and modular `feature/*` branches (`feature/3d-studio`, `feature/cubesat-simulator`, `feature/telemetry-analytics`, `feature/mission-control-comms`, `feature/alerts-ai-diagnostics`, `feature/core-platform-auth`).
+- **Strict Prohibitions:** Never commit local or scratch files (`FOLDER1`, `work`, `details`, `.env`, `node_modules`).
+
+

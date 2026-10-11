@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import apiClient from '../lib/apiClient';
 
 const AuthContext = createContext();
@@ -28,27 +28,35 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     const { data } = await apiClient.post('/auth/login', { email, password });
     localStorage.setItem('token', data.data.token);
     setUser(data.data);
     return data;
-  };
+  }, []);
 
-  const register = async (name, email, password) => {
+  const register = useCallback(async (name, email, password) => {
     const { data } = await apiClient.post('/auth/register', { name, email, password });
     localStorage.setItem('token', data.data.token);
     setUser(data.data);
     return data;
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
     setUser(null);
-  };
+  }, []);
+
+  const value = useMemo(() => ({
+    user,
+    login,
+    register,
+    logout,
+    loading
+  }), [user, login, register, logout, loading]);
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
