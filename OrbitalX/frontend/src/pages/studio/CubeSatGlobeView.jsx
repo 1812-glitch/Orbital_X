@@ -1,25 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Globe from 'react-globe.gl';
-import * as THREE from 'three';
-import {
-  calculateVisualAltitude,
-  generateFixedOrbitalPath,
-  getAngularDistanceDeg,
-  getSatSeed
-} from '../../utils/orbitalMath';
-import { 
-  Sun, 
-  Moon, 
-  Compass, 
-  Crosshair, 
-  RotateCw, 
-  Radio, 
-  Zap,
-  Eye,
-  Maximize2
-} from 'lucide-react';
+import { calculateVisualAltitude, getAngularDistanceDeg, getSatSeed } from '../../utils/orbitalMath';
+import { buildOrbitalRingMesh, buildGlobeSatMesh } from './utils/buildGlobeMeshes';
+import GlobeControlsHud from './components/GlobeControlsHud';
+import GlobeTelemetryBar from './components/GlobeTelemetryBar';
 
-export default function CubeSatGlobeView({
+function CubeSatGlobeView({
   satellite,
   status = 'NOMINAL',
   solarPanelsDeployed = true,
@@ -29,22 +15,67 @@ export default function CubeSatGlobeView({
   setWarpSpeed,
   onTelemetryUpdate
 }) {
-  const containerRef = useRef();
-  const globeRef = useRef();
+  const containerRef = useRef(null);
+  const globeRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 460 });
   const [nightMode, setNightMode] = useState(true);
   const [followSat, setFollowSat] = useState(false);
-  const [simTime, setSimTime] = useState(Date.now() / 1000);
-  const [autoRotateGlobe, setAutoRotateGlobe] = useState(false);
+  const [autoRotateGlobe] = useState(false);
 
-  // Responsive dimensions
+  // Throttled UI state (updated at 4-5 Hz for smooth UI)
+  const [uiTelemetry, setUiTelemetry] = useState({
+    lat: 0,
+    lng: 0,
+    heading: 0,
+    activeStations: [],
+    commArcs: [],
+    connectedStationName: 'Searching for Ground Station...'
+  });
+
+  // Fast refs for 60 FPS animation loop
+  const simTimeRef = useRef(Date.now() / 1000);
+  const warpSpeedRef = useRef(warpSpeed);
+  warpSpeedRef.current = warpSpeed;
+
+  const followSatRef = useRef(followSat);
+  followSatRef.current = followSat;
+
+  const groundStationsRef = useRef(groundStations);
+  groundStationsRef.current = groundStations;
+
+  const isThrustingRef = useRef(isThrusting);
+  isThrustingRef.current = isThrusting;
+
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
+  const onTelemetryUpdateRef = useRef(onTelemetryUpdate);
+  onTelemetryUpdateRef.current = onTelemetryUpdate;
+
+  const satMeshRef = useRef(null);
+  const ringMeshRef = useRef(null);
+  const plumeRef = useRef(null);
+  const ledRef = useRef(null);
+  const lastPosRef = useRef({ lat: 0, lng: 0, heading: 0 });
+  const isTransitioningRef = useRef(false);
+
+  const satId = satellite?.satelliteId || 'CUBESAT-ION';
+  const satName = satellite?.name || 'CubeSat Ion-X';
+  const formFactor = satellite?.formFactor || '3U';
+  const altitudeKm = satellite?.altitude || 512.4;
+  const inclination = satellite?.attitude?.mode === 'SUN_TRACKING' ? 45.0 : 97.4;
+  const visualAlt = Math.max(0.14, calculateVisualAltitude(altitudeKm, 'LEO'));
+  const visualAltRef = useRef(visualAlt);
+  visualAltRef.current = visualAlt;
+
+  // Responsive container observer
   useEffect(() => {
     if (!containerRef.current) return;
     const resizeObserver = new ResizeObserver((entries) => {
       for (let entry of entries) {
         setDimensions({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height
+          width: Math.round(entry.contentRect.width),
+          height: Math.round(entry.contentRect.height)
         });
       }
     });
@@ -52,341 +83,224 @@ export default function CubeSatGlobeView({
     return () => resizeObserver.disconnect();
   }, []);
 
-  const satId = satellite?.satelliteId || 'CUBESAT-ION';
-  const satName = satellite?.name || 'CubeSat Ion-X';
-  const formFactor = satellite?.formFactor || '3U';
-  const altitudeKm = satellite?.altitude || 512.4;
-  const inclination = satellite?.attitude?.mode === 'SUN_TRACKING' ? 45.0 : 97.4;
-  const visualAlt = calculateVisualAltitude(altitudeKm, 'LEO');
-
-  // Real-time orbital propagation loop: makes CubeSat orbit around the WHOLE Earth
-  useEffect(() => {
-    let lastTime = performance.now();
-    let animFrameId;
-
-    const tick = (now) => {
-      const deltaSec = (now - lastTime) / 1000;
-      lastTime = now;
-
-      // Advance sim time according to warp multiplier
-      setSimTime((prev) => prev + deltaSec * (warpSpeed || 15));
-      animFrameId = requestAnimationFrame(tick);
-    };
-
-    animFrameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animFrameId);
-  }, [warpSpeed]);
-
-  // Compute live latitude and longitude around the entire planet
-  const { currentLat, currentLng, orbitHeading } = useMemo(() => {
-    const periodSec = 5700; // ~95 min LEO period
+  // Keplerian orbit computation helper
+  const computeOrbitAt = useCallback((time) => {
+    const periodSec = 5700;
     const meanMotion = (2 * Math.PI) / periodSec;
     const seed = getSatSeed(satId);
     const nodeLng = ((seed * 73) % 360) * (Math.PI / 180);
     const phaseOffset = (seed * 1.5) % (2 * Math.PI);
 
-    const u = (simTime * meanMotion + phaseOffset) % (2 * Math.PI);
+    const u = (time * meanMotion + phaseOffset) % (2 * Math.PI);
     const incRad = (inclination * Math.PI) / 180;
 
     const sinLat = Math.sin(incRad) * Math.sin(u);
-    const lat = parseFloat((Math.asin(Math.max(-1, Math.min(1, sinLat))) * (180 / Math.PI)).toFixed(4));
+    const lat = (Math.asin(Math.max(-1, Math.min(1, sinLat))) * (180 / Math.PI));
 
-    const earthRot = (simTime * (2 * Math.PI / 86400)) % (2 * Math.PI);
+    const earthRot = (time * (2 * Math.PI / 86400)) % (2 * Math.PI);
     const lngInPlane = Math.atan2(Math.cos(incRad) * Math.sin(u), Math.cos(u));
     let lng = (nodeLng + lngInPlane - earthRot) * (180 / Math.PI);
-    lng = parseFloat((((((lng + 180) % 360) + 360) % 360) - 180).toFixed(4));
+    lng = (((((lng + 180) % 360) + 360) % 360) - 180);
 
-    // Instantaneous orbital velocity heading vector
+    const dt = 0.8;
+    const uNext = ((time + dt) * meanMotion + phaseOffset) % (2 * Math.PI);
+    const sinLatNext = Math.sin(incRad) * Math.sin(uNext);
+    const nextLat = (Math.asin(Math.max(-1, Math.min(1, sinLatNext))) * (180 / Math.PI));
+
+    const earthRotNext = ((time + dt) * (2 * Math.PI / 86400)) % (2 * Math.PI);
+    const lngInPlaneNext = Math.atan2(Math.cos(incRad) * Math.sin(uNext), Math.cos(uNext));
+    let nextLng = (nodeLng + lngInPlaneNext - earthRotNext) * (180 / Math.PI);
+    nextLng = (((((nextLng + 180) % 360) + 360) % 360) - 180);
+
     const heading = Math.round((Math.atan2(Math.cos(incRad), Math.cos(u)) * 180) / Math.PI);
+    return { lat, lng, nextLat, nextLng, heading };
+  }, [satId, inclination]);
 
-    return { currentLat: lat, currentLng: lng, orbitHeading: heading };
-  }, [simTime, satId, inclination]);
-
-  const onTelemetryUpdateRef = useRef(onTelemetryUpdate);
-  onTelemetryUpdateRef.current = onTelemetryUpdate;
-
-  // Push live position back to parent if callback provided (guarded against re-render loops)
+  // Synchronize 3D Mesh and Orbital Ring in Three.js scene
   useEffect(() => {
-    if (typeof onTelemetryUpdateRef.current === 'function') {
-      onTelemetryUpdateRef.current({
-        lat: currentLat,
-        lng: currentLng,
-        alt: visualAlt
-      });
+    let checkInterval = null;
+    const attachObjects = () => {
+      if (!globeRef.current?.scene) return false;
+      const scene = globeRef.current.scene();
+      if (!scene) return false;
+
+      if (satMeshRef.current) scene.remove(satMeshRef.current);
+      const newMesh = buildGlobeSatMesh({ formFactor, solarPanelsDeployed, status, ledRef, plumeRef });
+      satMeshRef.current = newMesh;
+      scene.add(newMesh);
+
+      if (ringMeshRef.current) scene.remove(ringMeshRef.current);
+      const newRing = buildOrbitalRingMesh(satId, inclination, visualAltRef.current);
+      ringMeshRef.current = newRing;
+      scene.add(newRing);
+
+      return true;
+    };
+
+    if (!attachObjects()) {
+      checkInterval = setInterval(() => {
+        if (attachObjects()) clearInterval(checkInterval);
+      }, 50);
     }
-  }, [currentLat, currentLng, visualAlt]);
 
-  // Camera tracking: follow CubeSat as it orbits
+    return () => {
+      if (checkInterval) clearInterval(checkInterval);
+      if (globeRef.current?.scene) {
+        if (satMeshRef.current) { globeRef.current.scene().remove(satMeshRef.current); satMeshRef.current = null; }
+        if (ringMeshRef.current) { globeRef.current.scene().remove(ringMeshRef.current); ringMeshRef.current = null; }
+      }
+    };
+  }, [formFactor, solarPanelsDeployed, status, satId, inclination]);
+
+  // 60 FPS Native Three.js Orbiting & Animation Loop
   useEffect(() => {
-    if (followSat && globeRef.current) {
+    let animFrameId;
+    let lastTime = performance.now();
+    let lastUiUpdate = 0;
+
+    const tick = (now) => {
+      animFrameId = requestAnimationFrame(tick);
+      const deltaSec = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+
+      simTimeRef.current += deltaSec * (warpSpeedRef.current || 15);
+      const currentTime = simTimeRef.current;
+      const globe = globeRef.current;
+      const satMesh = satMeshRef.current;
+
+      if (globe && satMesh && typeof globe.getCoords === 'function') {
+        const { lat, lng, nextLat, nextLng, heading } = computeOrbitAt(currentTime);
+        lastPosRef.current = { lat, lng, heading };
+
+        const p0 = globe.getCoords(lat, lng, visualAltRef.current);
+        if (p0) {
+          satMesh.position.set(p0.x, p0.y, p0.z);
+          const p1 = globe.getCoords(nextLat, nextLng, visualAltRef.current);
+          if (p1) {
+            satMesh.up.set(p0.x, p0.y, p0.z).normalize();
+            satMesh.lookAt(p1.x, p1.y, p1.z);
+          }
+        }
+
+        if (ringMeshRef.current) {
+          const earthRot = (currentTime * (2 * Math.PI / 86400)) % (2 * Math.PI);
+          ringMeshRef.current.rotation.y = -earthRot;
+        }
+
+        if (plumeRef.current) {
+          const isFiring = isThrustingRef.current || statusRef.current === 'THRUSTER_BURN';
+          if (isFiring) {
+            plumeRef.current.visible = true;
+            plumeRef.current.material.opacity = 0.75 + Math.sin(now * 0.035) * 0.25;
+            const s = 1.0 + Math.sin(now * 0.04) * 0.2;
+            plumeRef.current.scale.set(1.0, s, 1.0);
+          } else {
+            plumeRef.current.visible = false;
+          }
+        }
+
+        if (ledRef.current) {
+          const st = statusRef.current;
+          const blinkSpeed = st === 'SAFE_MODE' ? 0.008 : st === 'SCIENCE_ACQUISITION' ? 0.02 : 0.01;
+          ledRef.current.material.opacity = Math.sin(now * blinkSpeed) > 0 ? 1.0 : 0.25;
+        }
+
+        if (followSatRef.current && !isTransitioningRef.current) {
+          globe.pointOfView({ lat, lng, altitude: 1.8 }, 0);
+        }
+
+        if (now - lastUiUpdate > 250) {
+          lastUiUpdate = now;
+          const inRange = (groundStationsRef.current || []).filter((gs) => {
+            return getAngularDistanceDeg(lat, lng, gs.latitude, gs.longitude) <= 52;
+          });
+
+          let connName = 'Searching for Ground Station...';
+          const arcs = [];
+          if (inRange.length > 0) {
+            connName = `${inRange[0].name} (${inRange[0].stationId})`;
+            inRange.forEach((gs) => {
+              arcs.push({
+                startLat: lat,
+                startLng: lng,
+                endLat: gs.latitude,
+                endLng: gs.longitude,
+                color: ['#00F0FF', '#00FF66'],
+                name: gs.name
+              });
+            });
+          }
+
+          setUiTelemetry({
+            lat: parseFloat(lat.toFixed(4)),
+            lng: parseFloat(lng.toFixed(4)),
+            heading,
+            activeStations: inRange,
+            commArcs: arcs,
+            connectedStationName: connName
+          });
+
+          if (typeof onTelemetryUpdateRef.current === 'function') {
+            onTelemetryUpdateRef.current({ lat, lng, alt: visualAltRef.current });
+          }
+        }
+      }
+    };
+
+    animFrameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animFrameId);
+  }, [computeOrbitAt]);
+
+  const handleToggleFollow = () => {
+    const nextFollow = !followSat;
+    setFollowSat(nextFollow);
+    followSatRef.current = nextFollow;
+
+    if (nextFollow && globeRef.current && lastPosRef.current) {
+      isTransitioningRef.current = true;
       globeRef.current.pointOfView(
-        {
-          lat: currentLat,
-          lng: currentLng,
-          altitude: 1.8
-        },
-        300
+        { lat: lastPosRef.current.lat, lng: lastPosRef.current.lng, altitude: 1.8 },
+        700
       );
+      setTimeout(() => { isTransitioningRef.current = false; }, 720);
     }
-  }, [followSat, currentLat, currentLng]);
-
-  // Auto-rotate globe
-  useEffect(() => {
-    if (globeRef.current) {
-      globeRef.current.controls().autoRotate = autoRotateGlobe;
-      globeRef.current.controls().autoRotateSpeed = 0.5;
-    }
-  }, [autoRotateGlobe]);
-
-  // 1. Stable 3D Orbital Path around the WHOLE Earth
-  const orbitalPathData = useMemo(() => {
-    const coords = generateFixedOrbitalPath(
-      {
-        id: satId,
-        inclination,
-        alt: visualAlt
-      },
-      160
-    );
-    return [
-      {
-        id: `${satId}-path`,
-        coords,
-        color: '#00F0FF',
-        stroke: 1.6
-      }
-    ];
-  }, [satId, inclination, visualAlt]);
-
-  // 2. Active Ground Stations in Line-of-Sight & Communication Laser Beams
-  const { commArcs, activeStations, connectedStationName } = useMemo(() => {
-    const arcs = [];
-    let connectedName = 'Searching for Ground Station...';
-
-    const inRange = (groundStations || []).filter((gs) => {
-      const distDeg = getAngularDistanceDeg(currentLat, currentLng, gs.latitude, gs.longitude);
-      return distDeg <= 52; // LOS footprint
-    });
-
-    if (inRange.length > 0) {
-      const primaryGs = inRange[0];
-      connectedName = `${primaryGs.name} (${primaryGs.stationId})`;
-
-      inRange.forEach((gs) => {
-        arcs.push({
-          startLat: currentLat,
-          startLng: currentLng,
-          endLat: gs.latitude,
-          endLng: gs.longitude,
-          color: ['#00F0FF', '#00FF66'],
-          name: gs.name
-        });
-      });
-    }
-
-    return {
-      commArcs: arcs,
-      activeStations: inRange,
-      connectedStationName: connectedName
-    };
-  }, [currentLat, currentLng, groundStations]);
-
-  // 3. Custom 3D CubeSat Object Model for the Globe
-  const cubeSatObjects = useMemo(() => {
-    return [
-      {
-        lat: currentLat,
-        lng: currentLng,
-        alt: visualAlt,
-        id: satId,
-        name: satName,
-        status,
-        formFactor,
-        solarPanelsDeployed,
-        isThrusting
-      }
-    ];
-  }, [currentLat, currentLng, visualAlt, satId, satName, status, formFactor, solarPanelsDeployed, isThrusting]);
-
-  const createCubeSatMesh = (d) => {
-    const group = new THREE.Group();
-    const is6U = d.formFactor === '6U';
-    const w = is6U ? 1.6 : 0.8;
-    const h = 2.4;
-    const depth = 0.8;
-
-    // CubeSat Body Chassis
-    const busGeo = new THREE.BoxGeometry(w, h, depth);
-    const busMat = new THREE.MeshStandardMaterial({
-      color: 0x141b2d,
-      metalness: 0.85,
-      roughness: 0.3
-    });
-    const bus = new THREE.Mesh(busGeo, busMat);
-    group.add(bus);
-
-    // Silicon solar cells on body
-    const cellGeo = new THREE.BoxGeometry(w * 0.9, h * 0.9, depth + 0.04);
-    const cellMat = new THREE.MeshStandardMaterial({
-      color: 0x051336,
-      metalness: 0.95,
-      roughness: 0.15,
-      emissive: 0x001533,
-      emissiveIntensity: 0.5
-    });
-    const cells = new THREE.Mesh(cellGeo, cellMat);
-    group.add(cells);
-
-    // Deployable 3-Segment Origami Solar Wings
-    const segW = depth * 0.88; // 0.70 - strictly within depth (0.80) side length border!
-    const wingH = h * 0.85;
-    const wingMat = new THREE.MeshStandardMaterial({
-      color: 0x071b38,
-      metalness: 0.95,
-      roughness: 0.15,
-      emissive: 0x001533,
-      emissiveIntensity: 0.5
-    });
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
-
-    const createWingSegment = () => {
-      const sGroup = new THREE.Group();
-      const cell = new THREE.Mesh(new THREE.BoxGeometry(segW - 0.02, wingH - 0.02, 0.035), wingMat);
-      sGroup.add(cell);
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(segW, wingH, 0.03), frameMat);
-      sGroup.add(frame);
-      return sGroup;
-    };
-
-    // Left Wing (3 segments)
-    const leftWingGroup = new THREE.Group();
-    const zRoot = depth / 2 - 0.06;
-    if (d.solarPanelsDeployed) {
-      // 3 segments deployed in a straight coplanar array along -X
-      for (let s = 0; s < 3; s++) {
-        const seg = createWingSegment();
-        seg.position.set(-w / 2 - segW / 2 - s * segW, 0, zRoot);
-        leftWingGroup.add(seg);
-      }
-    } else {
-      // 3 segments folded in a parallel origami sandwich stack along side face
-      for (let s = 0; s < 3; s++) {
-        const seg = createWingSegment();
-        seg.rotation.y = Math.PI / 2;
-        seg.position.set(-w / 2 - 0.025 - s * 0.045, 0, zRoot - segW / 2);
-        leftWingGroup.add(seg);
-      }
-    }
-    group.add(leftWingGroup);
-
-    // Right Wing (3 segments)
-    const rightWingGroup = new THREE.Group();
-    if (d.solarPanelsDeployed) {
-      for (let s = 0; s < 3; s++) {
-        const seg = createWingSegment();
-        seg.position.set(w / 2 + segW / 2 + s * segW, 0, zRoot);
-        rightWingGroup.add(seg);
-      }
-    } else {
-      for (let s = 0; s < 3; s++) {
-        const seg = createWingSegment();
-        seg.rotation.y = -Math.PI / 2;
-        seg.position.set(w / 2 + 0.025 + s * 0.045, 0, zRoot - segW / 2);
-        rightWingGroup.add(seg);
-      }
-    }
-    group.add(rightWingGroup);
-
-    // Gold Rail Edges
-    const railMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
-    const railGeo = new THREE.BoxGeometry(0.06, h + 0.05, 0.06);
-    [[-w / 2, -depth / 2], [w / 2, -depth / 2], [-w / 2, depth / 2], [w / 2, depth / 2]].forEach(([rx, rz]) => {
-      const rail = new THREE.Mesh(railGeo, railMat);
-      rail.position.set(rx, 0, rz);
-      group.add(rail);
-    });
-
-    // Status Beacon LED
-    const ledGeo = new THREE.SphereGeometry(0.18, 12, 12);
-    const ledColor = d.status === 'SAFE_MODE' ? 0xff2a2a : d.status === 'SCIENCE_ACQUISITION' ? 0x00f0ff : 0x00ff66;
-    const ledMat = new THREE.MeshBasicMaterial({ color: ledColor });
-    const led = new THREE.Mesh(ledGeo, ledMat);
-    led.position.set(0, h / 2 + 0.12, 0);
-    group.add(led);
-
-    // Glowing Cold-Gas Thruster Plume (Warm Orange Plume)
-    if (d.isThrusting || d.status === 'THRUSTER_BURN') {
-      const plumeGeo = new THREE.ConeGeometry(0.45, 1.8, 16);
-      const plumeMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 });
-      const plume = new THREE.Mesh(plumeGeo, plumeMat);
-      plume.rotation.x = Math.PI;
-      plume.position.set(0, -h / 2 - 0.9, 0);
-      group.add(plume);
-    }
-
-    // Scale proportional to Earth visualization
-    group.scale.set(1.4, 1.4, 1.4);
-    return group;
   };
 
-  const earthImageUrl = nightMode
-    ? '//unpkg.com/three-globe/example/img/earth-night.jpg'
-    : '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+  useEffect(() => {
+    if (globeRef.current) {
+      globeRef.current.controls().autoRotate = autoRotateGlobe && !followSat;
+      globeRef.current.controls().autoRotateSpeed = 0.5;
+    }
+  }, [autoRotateGlobe, followSat]);
+
+  const earthImageUrl = nightMode ? '/textures/earth-night.jpg' : '/textures/earth-blue-marble.jpg';
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#050810] rounded-lg overflow-hidden border border-gray-800 shadow-2xl">
-      
-      {/* --- 3D EARTH GLOBE PLUGIN --- */}
       <Globe
         ref={globeRef}
         width={dimensions.width}
         height={dimensions.height}
         globeImageUrl={earthImageUrl}
-        bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
-        backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
-        
-        // 1. Custom 3D CubeSat Model moving along its orbit
-        objectsData={cubeSatObjects}
-        objectLat="lat"
-        objectLng="lng"
-        objectAltitude="alt"
-        objectThreeObject={createCubeSatMesh}
-
-        // 2. Full 3D Orbital Trajectory wrapping the whole Earth
-        pathsData={orbitalPathData}
-        pathPoints="coords"
-        pathPointLat={(p) => p[0]}
-        pathPointLng={(p) => p[1]}
-        pathPointAlt={(p) => p[2]}
-        pathColor={() => '#00F0FF'}
-        pathStroke={1.8}
-        pathDashLength={0.12}
-        pathDashGap={0.03}
-        pathDashAnimateTime={2400}
-        pathResolution={3}
-
-        // 3. Ground Stations Labels & Dots
+        bumpImageUrl="/textures/earth-topology.png"
+        backgroundImageUrl="/textures/night-sky.png"
         labelsData={groundStations}
         labelLat="latitude"
         labelLng="longitude"
         labelText="name"
         labelSize={1.1}
         labelDotRadius={0.45}
-        labelColor={(gs) => (activeStations.some((a) => a.name === gs.name) ? '#00FF66' : '#00F0FF')}
+        labelColor={(gs) => (uiTelemetry.activeStations.some((a) => a.name === gs.name) ? '#00FF66' : '#00F0FF')}
         labelResolution={2}
         labelIncludeDot={true}
-
-        // 4. Active Ground Station Radar Broadcast Rings
-        ringsData={activeStations}
+        ringsData={uiTelemetry.activeStations}
         ringLat="latitude"
         ringLng="longitude"
         ringColor={() => (t) => `rgba(0, 255, 102, ${Math.max(0, (1 - t) * 0.6)})`}
         ringMaxRadius={4.5}
         ringPropagationSpeed={2.2}
         ringRepeatPeriod={1200}
-
-        // 5. Line-of-Sight Laser Communication Downlink Beams
-        arcsData={commArcs}
+        arcsData={uiTelemetry.commArcs}
         arcStartLat="startLat"
         arcStartLng="startLng"
         arcEndLat="endLat"
@@ -399,100 +313,22 @@ export default function CubeSatGlobeView({
         arcDashAnimateTime={1500}
       />
 
-      {/* --- HUD CONTROLS: DAY/NIGHT TOGGLE, ORBIT SPEED WARP & CAMERA FOLLOW --- */}
-      <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 z-10">
-        
-        {/* Day / Night Toggle (Requested by User) */}
-        <div className="flex items-center bg-[#0A0F1F]/90 border border-gray-800 rounded-lg p-0.5 backdrop-blur-md shadow-lg">
-          <button
-            id="earth-toggle-day-btn"
-            onClick={() => setNightMode(false)}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded font-mono text-xs transition-all ${
-              !nightMode
-                ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.4)]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-            title="Switch to Daytime Blue Marble Earth"
-          >
-            <Sun size={13} className={!nightMode ? 'text-black' : 'text-[#FFB000]'} />
-            <span>DAY</span>
-          </button>
-          <button
-            id="earth-toggle-night-btn"
-            onClick={() => setNightMode(true)}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded font-mono text-xs transition-all ${
-              nightMode
-                ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.4)]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-            title="Switch to Night Lights Earth"
-          >
-            <Moon size={13} className={nightMode ? 'text-black' : 'text-[#00F0FF]'} />
-            <span>NIGHT</span>
-          </button>
-        </div>
+      <GlobeControlsHud
+        nightMode={nightMode}
+        setNightMode={setNightMode}
+        warpSpeed={warpSpeed}
+        setWarpSpeed={setWarpSpeed}
+        followSat={followSat}
+        onToggleFollow={handleToggleFollow}
+      />
 
-        {/* Orbit Speed Warp Toggle */}
-        <div className="flex items-center bg-[#0A0F1F]/90 border border-gray-800 rounded-lg p-0.5 backdrop-blur-md text-xs font-mono">
-          <span className="text-gray-500 px-2 flex items-center">
-            <RotateCw size={11} className="mr-1" /> WARP:
-          </span>
-          {[1, 5, 15, 30, 60].map((w) => (
-            <button
-              key={w}
-              onClick={() => setWarpSpeed(w)}
-              className={`px-2 py-1 rounded transition-colors ${
-                warpSpeed === w
-                  ? 'bg-[#00F0FF]/25 text-[#00F0FF] font-bold border border-[#00F0FF]/50'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {w}x
-            </button>
-          ))}
-        </div>
-
-        {/* Camera Tracking Toggle */}
-        <button
-          onClick={() => setFollowSat(!followSat)}
-          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-mono text-xs backdrop-blur-md border transition-all ${
-            followSat
-              ? 'bg-[#00FF66]/20 border-[#00FF66] text-[#00FF66] font-bold shadow-[0_0_12px_rgba(0,255,102,0.3)]'
-              : 'bg-[#0A0F1F]/90 border-gray-800 text-gray-400 hover:text-white'
-          }`}
-          title="Toggle camera following CubeSat in orbit"
-        >
-          <Crosshair size={13} className={followSat ? 'animate-spin' : ''} />
-          <span>{followSat ? 'TRACKING CUBESAT' : 'FREE CAMERA'}</span>
-        </button>
-      </div>
-
-      {/* --- BOTTOM HUD BAR: LIVE SUB-SATELLITE GROUND TRACK TELEMETRY --- */}
-      <div className="absolute bottom-3 left-3 right-3 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded-lg p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono shadow-xl z-10">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-[#00F0FF] animate-ping" />
-            <span className="text-white font-bold">{satName} ({formFactor})</span>
-          </div>
-          <div className="text-gray-400">
-            POSITION: <strong className="text-white">{currentLat >= 0 ? `${currentLat}° N` : `${Math.abs(currentLat)}° S`}, {currentLng >= 0 ? `${currentLng}° E` : `${Math.abs(currentLng)}° W`}</strong>
-          </div>
-          <div className="text-gray-400 hidden sm:inline">
-            HEADING: <strong className="text-[#00F0FF]">{orbitHeading}°</strong>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1.5">
-            <Radio size={12} className={activeStations.length > 0 ? 'text-[#00FF66] animate-pulse' : 'text-gray-500'} />
-            <span className="text-gray-400">LINK: </span>
-            <span className={activeStations.length > 0 ? 'text-[#00FF66] font-semibold' : 'text-gray-500'}>
-              {connectedStationName}
-            </span>
-          </div>
-        </div>
-      </div>
-
+      <GlobeTelemetryBar
+        satName={satName}
+        formFactor={formFactor}
+        uiTelemetry={uiTelemetry}
+      />
     </div>
   );
 }
+
+export default React.memo(CubeSatGlobeView);

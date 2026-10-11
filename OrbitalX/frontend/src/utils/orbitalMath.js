@@ -77,7 +77,7 @@ export const calculateVisualAltitude = (altitudeKm, orbitType = 'LEO') => {
   // GEO (~35,786 km, e.g. Weather / Gamma-3): ~0.65 (outer geostationary belt)
   const clampedKm = Math.max(200, Math.min(42000, km));
   const normalized = Math.pow(clampedKm / 36000, 0.72);
-  return parseFloat((0.045 + 0.6 * normalized).toFixed(4));
+  return parseFloat((0.08 + 0.6 * normalized).toFixed(4));
 };
 
 /**

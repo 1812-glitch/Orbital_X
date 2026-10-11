@@ -9,13 +9,16 @@ import {
 } from '../../utils/orbitalMath';
 
 export default function Scene({ 
-  fleetData, 
+  fleetData = [], 
   groundStations = [], 
   selectedSatIds = [],
+  selectedStationId = null,
+  onSelectStation = null,
   onSelectSatellite,
   showRings = true, 
   showLabels = true, 
   showUplinks = true, 
+  showStationPins = true,
   nightMode = true, 
   autoRotate = true,
   showOverlay = false
@@ -41,13 +44,23 @@ export default function Scene({
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Handle auto rotation
+  // Handle auto rotation dynamically
   useEffect(() => {
     if (globeRef.current) {
       globeRef.current.controls().autoRotate = autoRotate;
-      globeRef.current.controls().autoRotateSpeed = 0.4;
+      globeRef.current.controls().autoRotateSpeed = 0.5;
     }
   }, [autoRotate]);
+
+  // Smoothly focus camera when a ground station is selected
+  useEffect(() => {
+    if (globeRef.current && selectedStationId && groundStations.length > 0) {
+      const gs = groundStations.find(s => s._id === selectedStationId || s.stationId === selectedStationId);
+      if (gs && gs.latitude !== undefined && gs.longitude !== undefined) {
+        globeRef.current.pointOfView({ lat: gs.latitude, lng: gs.longitude, altitude: 1.85 }, 1200);
+      }
+    }
+  }, [selectedStationId, groundStations]);
 
   // Define status colors
   const getHealthColor = (d) => {
@@ -67,7 +80,6 @@ export default function Scene({
         const slotColor = isSelected ? SAT_SLOT_COLORS[slotIdx] : null;
         const isCubeSat = isCubeSatType(d.satellite);
         
-        // Accurate altitude scaling according to real physical telemetry
         const realAltitudeKm = d.telemetry.altitude || (d.satellite.orbitRadius ? d.satellite.orbitRadius - 6371 : null);
         const alt = calculateVisualAltitude(realAltitudeKm, d.satellite.orbitType);
 
@@ -98,34 +110,107 @@ export default function Scene({
       id: sat.id,
       name: `${sat.id} Orbital Path`,
       color: sat.slotColor,
-      stroke: 1.4, // Sleek, thin laser line
+      stroke: 1.4,
+      dashLength: 0.12,
+      dashGap: 0.03,
+      dashAnimateTime: 3000,
       coords: generateFixedOrbitalPath(sat, 120)
     }));
   }, [satellites, showRings]);
 
-  // Communication & signal transmission beams (ONLY rendered when in line of sight)
+  // Combined Paths: Orbital Paths + Vertical Telemetry Beacon Lines Pointing to Ground Stations
+  const allPaths = useMemo(() => {
+    const paths = [...selectedOrbitalPaths];
+    
+    if (showStationPins && groundStations && groundStations.length > 0) {
+      groundStations.forEach(gs => {
+        const isSelected = selectedStationId && (gs._id === selectedStationId || gs.stationId === selectedStationId);
+        const isOffline = gs.status === 'OFFLINE';
+        const isDegraded = gs.status === 'DEGRADED';
+        const color = isOffline ? '#FF2A2A' : isDegraded ? '#FFB020' : isSelected ? '#00F0FF' : '#00FF66';
+        const beaconAlt = isSelected ? 0.35 : 0.24;
+
+        // Vertical line pointing straight down into the ground station from high altitude
+        paths.push({
+          id: `station-beacon-${gs.stationId || gs._id}`,
+          name: `${gs.name} Telemetry Beacon`,
+          color,
+          stroke: isSelected ? 2.8 : 1.8,
+          dashLength: isSelected ? 0.15 : 0.25,
+          dashGap: 0.04,
+          dashAnimateTime: isSelected ? 1100 : 2200,
+          coords: [
+            [gs.latitude, gs.longitude, beaconAlt],
+            [gs.latitude, gs.longitude, 0.003]
+          ]
+        });
+      });
+    }
+
+    return paths;
+  }, [selectedOrbitalPaths, showStationPins, groundStations, selectedStationId]);
+
+  // Combined Points: Satellites + Top Beacon Points and Base Points on the Vertical Lines
+  const allPoints = useMemo(() => {
+    const pts = [...satellites];
+
+    if (showStationPins && groundStations && groundStations.length > 0) {
+      groundStations.forEach(gs => {
+        const isSelected = selectedStationId && (gs._id === selectedStationId || gs.stationId === selectedStationId);
+        const isOffline = gs.status === 'OFFLINE';
+        const isDegraded = gs.status === 'DEGRADED';
+        const color = isOffline ? '#FF2A2A' : isDegraded ? '#FFB020' : isSelected ? '#00F0FF' : '#00FF66';
+        const beaconAlt = isSelected ? 0.35 : 0.24;
+
+        // 1. Apex beacon dot at the top of the vertical line
+        pts.push({
+          lat: gs.latitude,
+          lng: gs.longitude,
+          alt: beaconAlt,
+          color,
+          radius: isSelected ? 0.38 : 0.22,
+          isStationBeacon: true,
+          station: gs,
+          id: `beacon-apex-${gs.stationId || gs._id}`,
+          name: `${gs.name} Beacon`
+        });
+
+        // 2. Base dot on the Earth surface
+        pts.push({
+          lat: gs.latitude,
+          lng: gs.longitude,
+          alt: 0.008,
+          color,
+          radius: isSelected ? 0.32 : 0.18,
+          isStationBase: true,
+          station: gs,
+          id: `beacon-base-${gs.stationId || gs._id}`,
+          name: gs.name
+        });
+      });
+    }
+
+    return pts;
+  }, [satellites, showStationPins, groundStations, selectedStationId]);
+
+  // Communication & signal transmission beams
   const arcs = useMemo(() => {
     if (!showUplinks || satellites.length === 0 || groundStations.length === 0) return [];
     
     const calculatedArcs = [];
-    // Only generate communication beams for SELECTED satellites
     const activeTargets = satellites.filter(s => s.isSelected);
 
     activeTargets.forEach(sat => {
-      // Find connected stations that are physically in Line of Sight (LOS <= 55 degrees)
       const inRangeStations = groundStations.filter(gs => {
-        // Must be a designated connected station or nearby station
         const isDesignated = gs.connectedSatellites && gs.connectedSatellites.some(s => {
           const id = typeof s === 'object' ? (s.satelliteId || s._id) : s;
           return id === sat.id;
         });
 
         const distDeg = getAngularDistanceDeg(sat.lat, sat.lng, gs.latitude, gs.longitude);
-        // Only establish active radio link if station is in line of sight (<= 55 deg above horizon)
         return isDesignated && distDeg <= 55;
       });
 
-      // If designated station is currently in LOS, render clean, low-altitude laser beam
       inRangeStations.forEach(gs => {
         const color = sat.slotColor || '#00F0FF';
         calculatedArcs.push({
@@ -145,15 +230,22 @@ export default function Scene({
     return calculatedArcs;
   }, [showUplinks, satellites, groundStations]);
 
-  // Stations receiving active signals for radar broadcast rings
-  const activeReceivingStations = useMemo(() => {
+  // Stations receiving active signals or all ground stations for radar rings
+  const allRings = useMemo(() => {
+    if (!showRings) return [];
+    if (groundStations && groundStations.length > 0) {
+      return groundStations.map(gs => ({
+        ...gs,
+        isSelected: selectedStationId && (gs._id === selectedStationId || gs.stationId === selectedStationId)
+      }));
+    }
     const activeStationNames = new Set(arcs.map(a => a.stationName));
     return groundStations.filter(gs => activeStationNames.has(gs.name));
-  }, [arcs, groundStations]);
+  }, [groundStations, selectedStationId, showRings, arcs]);
 
   const earthImageUrl = nightMode 
-    ? "//unpkg.com/three-globe/example/img/earth-night.jpg" 
-    : "//unpkg.com/three-globe/example/img/earth-blue-marble.jpg";
+    ? "/textures/earth-night.jpg" 
+    : "/textures/earth-blue-marble.jpg";
 
   return (
     <div ref={containerRef} className="w-full h-full bg-[#050810] relative rounded-lg overflow-hidden border border-gray-800 shadow-[0_0_40px_rgba(0,240,255,0.05)] cursor-move">
@@ -162,56 +254,64 @@ export default function Scene({
         width={dimensions.width}
         height={dimensions.height}
         globeImageUrl={earthImageUrl}
-        bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
-        backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+        bumpImageUrl="/textures/earth-topology.png"
+        backgroundImageUrl="/textures/night-sky.png"
         
-        // 1. Satellite Points & Interactive Selection
-        pointsData={satellites}
+        // 1. Points: Satellites + Vertical Beacon Apex/Base markers
+        pointsData={allPoints}
         pointLat="lat"
         pointLng="lng"
         pointAltitude="alt"
-        pointColor={d => d.slotColor || getHealthColor(d)}
-        pointRadius={d => d.isSelected ? 0.32 : 0.18}
+        pointColor={d => d.color || d.slotColor || getHealthColor(d)}
+        pointRadius={d => d.radius || (d.isSelected ? 0.32 : 0.18)}
         pointResolution={16}
         onPointClick={(d) => {
-          if (onSelectSatellite) {
+          if (d.isStationBeacon || d.isStationBase) {
+            if (onSelectStation && d.station) onSelectStation(d.station);
+          } else if (onSelectSatellite) {
             onSelectSatellite(d.id);
           }
         }}
-        pointLabel={showLabels ? (d) => `
-          <div style="background: rgba(10, 15, 31, 0.95); padding: 8px 12px; border: 1px solid ${d.slotColor || '#1f2937'}; border-radius: 6px; font-family: monospace; font-size: 11px; box-shadow: 0 0 15px rgba(0,0,0,0.8);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-              <b style="color: ${d.slotColor || '#00F0FF'}; font-size: 12px;">${d.id}</b>
-              ${d.isSelected ? `<span style="background: ${d.slotColor}30; color: ${d.slotColor}; padding: 1px 4px; border-radius: 3px; font-size: 9px; font-weight: bold;">SLOT ${d.slotIdx + 1}</span>` : ''}
-            </div>
-            <div style="color: #d1d5db; font-size: 10px; margin-bottom: 2px;">${d.name} (${d.type})</div>
-            <div style="color: #9ca3af; font-size: 10px;">
-              STATUS: <span style="color: ${getHealthColor(d)}; font-weight: bold;">${d.status}</span> | ALT: ${d.altitudeKm ? d.altitudeKm.toLocaleString() : '550'} km (${d.type})
-            </div>
-            ${d.isSelected ? `
-              <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #374151; color: #00FF66; font-size: 9px;">
-                ● ACTIVE ORBITAL PATH PROJECTED
+        pointLabel={showLabels ? (d) => {
+          if (d.isStationBeacon || d.isStationBase) {
+            const gs = d.station;
+            return `
+              <div style="background: rgba(10, 15, 31, 0.95); padding: 8px 12px; border: 1px solid #00F0FF; border-radius: 6px; font-family: monospace; font-size: 11px; box-shadow: 0 0 15px rgba(0,240,255,0.3);">
+                <b style="color: #00F0FF; font-size: 12px;">📡 ${gs.name} (${gs.stationId})</b><br/>
+                <span style="color: #d1d5db;">Location: ${gs.country} (${gs.latitude?.toFixed(2)}°, ${gs.longitude?.toFixed(2)}°)</span><br/>
+                <span style="color: #00FF66; font-weight: bold;">STATUS: ${gs.status || 'ACTIVE'}</span><br/>
+                <span style="color: #00F0FF; font-size: 10px;">Click to inspect ground station & diagnostics</span>
               </div>
-            ` : `
-              <div style="margin-top: 4px; color: #6b7280; font-size: 9px;">Click to toggle 3D orbital trajectory</div>
-            `}
-          </div>
-        ` : () => ''}
+            `;
+          }
+          return `
+            <div style="background: rgba(10, 15, 31, 0.95); padding: 8px 12px; border: 1px solid ${d.slotColor || '#1f2937'}; border-radius: 6px; font-family: monospace; font-size: 11px; box-shadow: 0 0 15px rgba(0,0,0,0.8);">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <b style="color: ${d.slotColor || '#00F0FF'}; font-size: 12px;">${d.id}</b>
+                ${d.isSelected ? `<span style="background: ${d.slotColor}30; color: ${d.slotColor}; padding: 1px 4px; border-radius: 3px; font-size: 9px; font-weight: bold;">SLOT ${d.slotIdx + 1}</span>` : ''}
+              </div>
+              <div style="color: #d1d5db; font-size: 10px; margin-bottom: 2px;">${d.name} (${d.type})</div>
+              <div style="color: #9ca3af; font-size: 10px;">
+                STATUS: <span style="color: ${getHealthColor(d)}; font-weight: bold;">${d.status}</span> | ALT: ${d.altitudeKm ? d.altitudeKm.toLocaleString() : '550'} km (${d.type})
+              </div>
+            </div>
+          `;
+        } : () => ''}
 
-        // 2. Stable 3D Orbital Trajectory Paths (Max 3, sleek & close to Earth)
-        pathsData={selectedOrbitalPaths}
+        // 2. Trajectories & Vertical Telemetry Beacon Lines
+        pathsData={allPaths}
         pathPoints="coords"
         pathPointLat={p => p[0]}
         pathPointLng={p => p[1]}
         pathPointAlt={p => p[2]}
         pathColor={d => d.color}
-        pathStroke={1.4}
-        pathDashLength={0.12}
-        pathDashGap={0.03}
-        pathDashAnimateTime={3000}
+        pathStroke={d => d.stroke || 1.4}
+        pathDashLength={d => d.dashLength || 0.15}
+        pathDashGap={d => d.dashGap || 0.04}
+        pathDashAnimateTime={d => d.dashAnimateTime || 2500}
         pathResolution={3}
 
-        // 3. Ground Stations (Clean Labels & Dots)
+        // 3. Ground Station Labels & Text
         labelsData={groundStations}
         labelLat="latitude"
         labelLng="longitude"
@@ -219,11 +319,14 @@ export default function Scene({
         labelSize={1.2}
         labelDotRadius={0.4}
         labelColor={(gs) => {
-          const isReceiving = arcs.some(a => a.stationName === gs.name);
-          return isReceiving ? '#00FF66' : '#00F0FF';
+          const isSelected = selectedStationId && (gs._id === selectedStationId || gs.stationId === selectedStationId);
+          return isSelected ? '#00F0FF' : '#00FF66';
         }}
         labelResolution={2}
         labelIncludeDot={true}
+        onLabelClick={(gs) => {
+          if (onSelectStation) onSelectStation(gs);
+        }}
         labelLabel={(gs) => `
           <div style="background: rgba(10, 15, 31, 0.95); padding: 6px 10px; border: 1px solid #00F0FF; border-radius: 4px; font-family: monospace; font-size: 10px;">
             <b style="color: #00F0FF;">${gs.name} (${gs.stationId})</b><br/>
@@ -232,67 +335,36 @@ export default function Scene({
           </div>
         `}
 
-        // 4. Subtle Ground Station Radar Broadcast Rings for stations in active contact
-        ringsData={activeReceivingStations}
+        // 4. Ground Station Radar Broadcast Rings
+        ringsData={allRings}
         ringLat="latitude"
         ringLng="longitude"
-        ringColor={() => (t) => `rgba(0, 255, 102, ${Math.max(0, (1 - t) * 0.5)})`}
-        ringMaxRadius={4}
-        ringPropagationSpeed={2}
-        ringRepeatPeriod={1400}
+        ringColor={d => (t) => d.isSelected 
+          ? `rgba(0, 240, 255, ${Math.max(0, (1 - t) * 0.95)})`
+          : `rgba(0, 255, 102, ${Math.max(0, (1 - t) * 0.45)})`
+        }
+        ringMaxRadius={d => d.isSelected ? 5.5 : 3.5}
+        ringPropagationSpeed={d => d.isSelected ? 2.8 : 1.6}
+        ringRepeatPeriod={d => d.isSelected ? 1000 : 1800}
 
-        // 5. Line-of-Sight Laser Communication Beams (Low altitude, directly to station)
+        // 5. Laser Communication Links
         arcsData={arcs}
         arcStartLat="startLat"
         arcStartLng="startLng"
         arcEndLat="endLat"
         arcEndLng="endLng"
         arcColor="color"
-        arcAltitude={0.025} // Low altitude direct laser link (NEVER shoots out into space)
+        arcAltitude={0.025}
         arcStroke={1.0}
         arcDashLength={0.3}
         arcDashGap={1.0}
         arcDashAnimateTime={1500}
       />
       
-      {/* Viewport Overlay UI: Status Badge (Optional, disabled in OrbitalViewer to avoid overlapping with top toolbar) */}
-      {showOverlay && (
-        <div className="absolute top-4 right-4 pointer-events-none flex flex-col items-end space-y-2">
-          <div className="flex items-center space-x-2 text-[10px] font-mono text-[#00F0FF] tracking-widest bg-[#00F0FF]/10 px-3 py-1.5 rounded border border-[#00F0FF]/30 backdrop-blur-md">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F0FF] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00F0FF]"></span>
-            </span>
-            <span>LIVE 3D ORBITAL SIMULATION</span>
-          </div>
-
-          {selectedSatIds.length > 0 && (
-            <div className="flex items-center space-x-2 bg-[#0A0F1F]/90 border border-gray-800 px-3 py-1.5 rounded-md backdrop-blur-md">
-              <span className="text-[10px] font-mono text-gray-400">PROJECTING:</span>
-              <div className="flex items-center space-x-1.5">
-                {selectedSatIds.map((id, idx) => (
-                  <span 
-                    key={id}
-                    className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold"
-                    style={{ 
-                      backgroundColor: `${SAT_SLOT_COLORS[idx]}25`, 
-                      color: SAT_SLOT_COLORS[idx],
-                      border: `1px solid ${SAT_SLOT_COLORS[idx]}60`
-                    }}
-                  >
-                    {id}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      
       {/* Bottom Controls Legend */}
       <div className="absolute bottom-4 right-4 pointer-events-none">
-        <p className="text-gray-500 font-mono text-[11px] uppercase tracking-wider text-right bg-[#0A0F1F]/80 px-3 py-1.5 rounded border border-gray-800/80 backdrop-blur-sm">
-          Left Drag: Rotate Globe • Scroll: Zoom • Click Sat: Select (Max 3)
+        <p className="text-gray-400 font-mono text-[11px] uppercase tracking-wider text-right bg-[#0A0F1F]/90 px-3 py-1.5 rounded border border-gray-800/80 backdrop-blur-sm shadow-md">
+          Left Drag: Rotate • Scroll: Zoom • Click Station / Beacon to Focus
         </p>
       </div>
     </div>
