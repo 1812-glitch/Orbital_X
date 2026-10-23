@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Settings, 
@@ -9,7 +9,8 @@ import {
   DownloadCloud, 
   Trash2, 
   Plus, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  Undo2
 } from 'lucide-react';
 import { FORM_FACTORS } from '../cubesatComponents';
 
@@ -34,18 +35,28 @@ export default function StudioToolbar({
   warningsCount = 0,
   totalParts = 0
 }) {
+  const navigate = useNavigate();
+
   return (
     <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20 gap-3">
       {/* Left: Quick Nav, Mission Name, Mode, Form Factor, Orbit */}
       <div className="pointer-events-auto flex flex-wrap items-center gap-2.5 bg-[#0A0F1F]/92 backdrop-blur-md border border-gray-800 rounded-xl px-3.5 py-1.5 shadow-2xl">
-        <NavLink
-          to="/dashboard"
-          className="flex items-center space-x-1 text-xs font-mono text-gray-400 hover:text-[#00F0FF] transition-colors pr-2 border-r border-gray-800"
-          title="Exit 3D Studio"
+        <button
+          type="button"
+          id="studio-undo-back-btn"
+          onClick={() => {
+            if (window.history.state && window.history.state.idx > 0) {
+              navigate(-1);
+            } else {
+              navigate('/dashboard');
+            }
+          }}
+          className="flex items-center space-x-1.5 text-xs font-mono text-gray-300 hover:text-[#00F0FF] transition-colors pr-2.5 border-r border-gray-800 cursor-pointer group"
+          title="Undo: Return to most immediate recently opened page"
         >
-          <ArrowLeft size={13} className="text-[#00F0FF]" />
-          <span className="font-bold hidden sm:inline">EXIT</span>
-        </NavLink>
+          <Undo2 size={13} className="text-[#00F0FF] group-hover:-rotate-45 transition-transform duration-200" />
+          <span className="font-bold hidden sm:inline">UNDO</span>
+        </button>
 
         {/* Editable Mission Name */}
         <div className="flex items-center space-x-2 pr-1 border-r border-gray-800">

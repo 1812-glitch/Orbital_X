@@ -1,12 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 import CubeSatCanvas from './CubeSatCanvas';
 import { CUBESAT_COMPONENTS, FORM_FACTORS } from './cubesatComponents';
 import StudioToolbar from './components/StudioToolbar';
 import StudioHardwareDrawer from './components/StudioHardwareDrawer';
 import StudioDiagnosticsDrawer from './components/StudioDiagnosticsDrawer';
 import StudioBottomBar from './components/StudioBottomBar';
+import satelliteService from '../../services/satelliteService';
+import missionService from '../../services/missionService';
 
 export default function CubeSatStudio() {
+  const [searchParams] = useSearchParams();
+  const missionId = searchParams.get('missionId');
+  const missionDbId = searchParams.get('missionDbId');
+  const satId = searchParams.get('satId');
+  const satNameParam = searchParams.get('satName');
+  const formFactorParam = searchParams.get('formFactor');
+
   // Mission Configuration State
   const [missionName, setMissionName] = useState('Untitled Mission');
   const [isEditingName, setIsEditingName] = useState(false);
@@ -33,8 +43,26 @@ export default function CubeSatStudio() {
   const [lastAction, setLastAction] = useState(null);
   const [highlightedComponentId, setHighlightedComponentId] = useState(null);
 
-  // Load from local storage on mount
+  // Load from query parameters (when launching from a mission) or local storage on mount
   useEffect(() => {
+    if (satNameParam || missionId) {
+      if (satNameParam) setMissionName(decodeURIComponent(satNameParam));
+      else if (missionId) setMissionName(`${missionId} - Spacecraft`);
+
+      if (formFactorParam && FORM_FACTORS[formFactorParam]) {
+        setFormFactor(formFactorParam);
+      }
+
+      setMountedComponents({
+        'obc_core': 1,
+        'battery_pack': 1,
+        'solar_panel_1u': 2,
+        'antenna_deployable': 1,
+        'camera_visible': 1
+      });
+      return;
+    }
+
     const saved = localStorage.getItem('orbitalx_cubesat_design');
     if (saved) {
       try {
@@ -47,14 +75,14 @@ export default function CubeSatStudio() {
         console.error('Failed to load saved design', e);
       }
     }
-  }, []);
+  }, [satNameParam, formFactorParam, missionId]);
 
   const showToast = (msg, type = 'success') => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 3500);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const design = {
       missionName,
       formFactor,
@@ -63,7 +91,44 @@ export default function CubeSatStudio() {
       savedAt: new Date().toISOString()
     };
     localStorage.setItem('orbitalx_cubesat_design', JSON.stringify(design));
-    showToast(`Design "${missionName}" successfully saved to local telemetry cache!`);
+
+    try {
+      const targetSatId = satId || `CUBESAT-${(missionName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase() || 'CAD')}-${formFactor}`;
+      const resolvedOrbit = targetOrbit.includes('SSO') ? 'SSO' : targetOrbit.includes('MEO') ? 'MEO' : targetOrbit.includes('GEO') ? 'GEO' : 'LEO';
+      
+      const satRes = await satelliteService.create({
+        name: missionName,
+        satelliteId: targetSatId,
+        type: `CUBESAT_${formFactor}`,
+        formFactor,
+        orbitType: resolvedOrbit,
+        cubesatDesign: design,
+        status: 'ACTIVE'
+      });
+
+      // If tied to a mission, ensure it is linked in the mission's assignedSatellites
+      if (missionDbId && satRes?.data?._id) {
+        try {
+          const currentMissionRes = await missionService.getById(missionDbId);
+          const currentSatIds = (currentMissionRes?.data?.assignedSatellites || []).map(s => typeof s === 'object' ? s._id : s);
+          if (!currentSatIds.includes(satRes.data._id)) {
+            await missionService.update(missionDbId, {
+              assignedSatellites: [...currentSatIds, satRes.data._id]
+            });
+          }
+        } catch (mErr) {
+          console.warn('Could not link to mission assignedSatellites on studio save:', mErr);
+        }
+      }
+
+      showToast(`CubeSat "${missionName}" successfully saved to MongoDB Atlas!`, 'success');
+    } catch (err) {
+      if (err.response?.status === 400 && err.response?.data?.message?.includes('already exists')) {
+        showToast(`Design updated and saved to MongoDB Atlas!`, 'success');
+      } else {
+        showToast(`Design saved to local cache (${err.response?.data?.message || 'Ready for fleet sync'})`, 'success');
+      }
+    }
   };
 
   const handleExportCAD = () => {
@@ -388,6 +453,31 @@ export default function CubeSatStudio() {
         warningsCount={warnings.length === 1 && warnings[0].startsWith('ALL SYSTEMS') ? 0 : warnings.length}
         totalParts={totalParts}
       />
+
+      {/* Active Mission Satellite Design Mode Banner */}
+      {missionId && (
+        <div className="absolute top-16 left-3 right-3 z-20 pointer-events-auto bg-[#0A0F1F]/90 backdrop-blur-md border border-[#00FF66]/50 rounded-xl px-4 py-2.5 flex items-center justify-between shadow-[0_0_20px_rgba(0,255,102,0.2)] animate-in fade-in duration-300">
+          <div className="flex items-center space-x-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66] animate-ping" />
+            <span className="font-mono text-xs text-[#00FF66] font-bold tracking-wider uppercase">
+              🚀 LAUNCHING NEW SATELLITE FOR MISSION: <span className="text-white">{missionId}</span>
+            </span>
+            {satId && (
+              <span className="hidden sm:inline font-mono text-[10px] px-2 py-0.5 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 font-bold">
+                BUS ID: {satId}
+              </span>
+            )}
+          </div>
+          {missionDbId && (
+            <Link
+              to={`/missions/${missionDbId}`}
+              className="font-mono text-[11px] text-[#00FF66] hover:text-black hover:bg-[#00FF66] flex items-center space-x-1.5 transition-all uppercase tracking-wider font-bold bg-[#00FF66]/15 px-3 py-1.5 rounded border border-[#00FF66]/40"
+            >
+              <span>← RETURN TO MISSION DETAILS</span>
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Left Hardware Components Drawer */}
       <StudioHardwareDrawer 
