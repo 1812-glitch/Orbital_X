@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { groundStationService } from '../../services/groundStationService';
 import telemetryService from '../../services/telemetryService';
 import Scene from '../../components/3d/Scene';
+import OrbitalBottomDock from '../../components/3d/OrbitalBottomDock';
 import { useSatellite } from '../../context/SatelliteContext';
 import GroundStationsHeader from './components/GroundStationsHeader';
 import GroundStationDetailDrawer from './components/GroundStationDetailDrawer';
@@ -15,7 +16,13 @@ export default function GroundStations() {
   const [loading, setLoading] = useState(true);
   const { openDetailModal } = useSatellite();
 
-  // 3D Earth Globe Controls
+  // 3D Earth Globe Controls & Middle Bottom Dock State
+  const sceneRef = useRef(null);
+  const [lightingMode, setLightingMode] = useState('TERMINATOR');
+  const [isPaused, setIsPaused] = useState(false);
+  const [timeScale, setTimeScale] = useState(1);
+  const [showRings, setShowRings] = useState(true);
+  const [showLabels, setShowLabels] = useState(true);
   const [nightMode, setNightMode] = useState(true);
   const [autoRotate, setAutoRotate] = useState(true);
 
@@ -147,17 +154,20 @@ export default function GroundStations() {
           </div>
 
           {/* 3D Earth Globe with Vertical Ground Station Beacons */}
-          <div className="flex-1 relative w-full h-full min-h-[460px]">
+          <div className="flex-1 relative w-full h-full min-h-[500px]">
             <Scene 
+              ref={sceneRef}
               fleetData={fleetData}
               groundStations={stations}
               selectedStationId={activeStation.stationId || activeStation._id}
               onSelectStation={(st) => setSelectedStation(st)}
-              showRings={true}
-              showLabels={true}
+              showRings={showRings}
+              showLabels={showLabels}
               showUplinks={true}
               showStationPins={true}
-              nightMode={nightMode}
+              lightingMode={lightingMode}
+              timeScale={timeScale}
+              isPaused={isPaused}
               autoRotate={autoRotate}
             />
 
@@ -165,8 +175,8 @@ export default function GroundStations() {
               GROUND_STATIONS
             </div>
 
-            {/* Quick Station Selector Pills Overlaid on Globe bottom */}
-            <div className="absolute bottom-4 left-4 right-4 flex items-center space-x-2 overflow-x-auto pb-1 z-10 pointer-events-auto custom-scrollbar">
+            {/* Quick Station Selector Pills Overlaid on Globe bottom above dock */}
+            <div className="absolute bottom-18 left-4 right-4 flex items-center space-x-2 overflow-x-auto pb-1 z-10 pointer-events-auto custom-scrollbar">
               {stations.map(st => {
                 const isSelected = activeStation.stationId === st.stationId || activeStation._id === st._id;
                 const isOffline = st.status === 'OFFLINE';
@@ -192,6 +202,28 @@ export default function GroundStations() {
                   </button>
                 );
               })}
+            </div>
+
+            {/* Middle-Bottom Cyber Dock / Controls (Matches 3D Orbital Simulator) */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-auto scale-90 sm:scale-100 origin-bottom">
+              <OrbitalBottomDock
+                isPaused={isPaused}
+                onTogglePause={() => setIsPaused(!isPaused)}
+                timeScale={timeScale}
+                onChangeTimeScale={setTimeScale}
+                lightingMode={lightingMode}
+                onChangeLightingMode={setLightingMode}
+                showLabels={showLabels}
+                onToggleLabels={() => setShowLabels(!showLabels)}
+                showOrbits={showRings}
+                onToggleOrbits={() => setShowRings(!showRings)}
+                onResetView={() => {
+                  if (sceneRef.current?.resetView) {
+                    sceneRef.current.resetView();
+                  }
+                }}
+                hasSelectedSat={false}
+              />
             </div>
           </div>
         </div>

@@ -16,7 +16,56 @@ const getCubeSatState = asyncHandler(async (req, res) => {
   const { id } = req.query;
 
   // If specific ID requested, return that one
-  if (id && cubeSatStates[id]) {
+  if (id) {
+    if (!cubeSatStates[id]) {
+      // Look up satellite in DB to populate realistic metadata
+      let dbSat = null;
+      try {
+        dbSat = await Satellite.findOne({
+          $or: [
+            { satelliteId: id },
+            { name: id },
+            ...(id.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: id }] : [])
+          ]
+        });
+      } catch (e) {
+        // Ignore DB query errors and use safe defaults
+      }
+
+      const satName = dbSat?.name || id;
+      const rawType = (dbSat?.type || '').toUpperCase();
+      let formFactor = '3U';
+      if (rawType.includes('16U') || rawType === '16U') formFactor = '16U';
+      else if (rawType.includes('12U') || rawType === '12U') formFactor = '12U';
+      else if (rawType.includes('6U') || rawType === '6U') formFactor = '6U';
+      else if (rawType.includes('1U') || rawType === '1U') formFactor = '1U';
+      else if (rawType.includes('2U') || rawType === '2U') formFactor = '2U';
+
+      const orbitType = dbSat?.orbitType || 'LEO';
+
+      cubeSatStates[id] = {
+        satelliteId: id,
+        name: satName,
+        formFactor,
+        orbitType,
+        status: dbSat?.status || 'NOMINAL',
+        speed: dbSat?.orbitSpeed || 7.58,
+        altitude: dbSat?.orbitRadius ? Math.max(300, dbSat.orbitRadius - 6371) : 510.0,
+        distanceFromEarth: dbSat?.orbitRadius || 6881.0,
+        temperature: { bus: 22.0, solar: 42.0, battery: 20.0, radio: 30.0 },
+        load: { cpu: 20, memory: 30, busPower: 15.0 },
+        battery: 88.0,
+        propellant: 92.0,
+        solarPanelsDeployed: true,
+        heaterActive: false,
+        attitude: { roll: 0.1, pitch: -0.2, yaw: 1.5, spinRate: 0.04, mode: 'NADIR' },
+        groundStation: 'Toulouse Center (GS-003)',
+        signalStrength: -79,
+        snr: 15.0,
+        packetsDownlinked: 2400,
+        commandHistory: []
+      };
+    }
     return res.status(200).json(new ApiResponse(200, cubeSatStates[id], 'CubeSat simulation state retrieved'));
   }
 
