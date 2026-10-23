@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   CheckCircle, 
   Check, 
   Search, 
   Filter, 
-  Eye 
+  Eye,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
@@ -27,8 +29,53 @@ export default function AlertsDetailView({
   loading,
   filteredAlerts,
   generateTelemetryCurve,
-  handleAction
+  handleAction,
+  onRefreshAlerts,
+  onStartAutoPilot,
+  unresolvedCount = 0,
+  fleetUnresolvedCount = 0,
+  nextUnresolvedAlert = null,
+  onResolveNextError = null,
+  onFinishAll = null,
+  autoOpenAlertId = null
 }) {
+  const [checkingAlerts, setCheckingAlerts] = useState({});
+  const [statusFeedback, setStatusFeedback] = useState({});
+
+  const handleCheckAlertStatus = async (alert) => {
+    const id = alert._id;
+    setCheckingAlerts(prev => ({ ...prev, [id]: true }));
+
+    try {
+      if (onRefreshAlerts) {
+        await onRefreshAlerts();
+      }
+      // Brief visual pause to show active telemetry check animation
+      await new Promise(r => setTimeout(r, 650));
+
+      const isResolved = alert.severity === 'RESOLVED';
+      setStatusFeedback(prev => ({
+        ...prev,
+        [id]: {
+          isResolved,
+          checkedAt: new Date().toLocaleTimeString(),
+          label: isResolved ? 'RESOLVED ✓' : 'STILL ACTIVE'
+        }
+      }));
+    } catch (err) {
+      console.error('Failed to check alert status:', err);
+      setStatusFeedback(prev => ({
+        ...prev,
+        [id]: {
+          isResolved: false,
+          checkedAt: new Date().toLocaleTimeString(),
+          label: 'CHECK FAILED'
+        }
+      }));
+    } finally {
+      setCheckingAlerts(prev => ({ ...prev, [id]: false }));
+    }
+  };
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Active CubeSat Header Bar with Navigation Back Button */}
@@ -107,9 +154,9 @@ export default function AlertsDetailView({
 
           {[
             { 
-              key: 'ALL', 
-              label: 'ALL INCIDENTS', 
-              count: currentSatAlerts.length,
+              key: 'ACTIVE', 
+              label: 'ACTIVE ANOMALIES', 
+              count: currentSatAlerts.filter(a => a.severity !== 'RESOLVED').length,
               badgeColor: 'bg-[#00F0FF] text-black'
             },
             { 
@@ -126,9 +173,15 @@ export default function AlertsDetailView({
             },
             { 
               key: 'RESOLVED', 
-              label: 'RESOLVED', 
+              label: 'RESOLVED ARCHIVE', 
               count: currentSatAlerts.filter(a => a.severity === 'RESOLVED').length,
               badgeColor: 'bg-[#00FF66] text-black'
+            },
+            { 
+              key: 'ALL', 
+              label: 'ALL HISTORY', 
+              count: currentSatAlerts.length,
+              badgeColor: 'bg-gray-700 text-white'
             }
           ].map(tab => (
             <button
@@ -176,18 +229,32 @@ export default function AlertsDetailView({
             RETRIEVING CUBESAT TELEMETRY ANOMALIES...
           </div>
         ) : filteredAlerts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 bg-[#0B1221] border border-gray-800 rounded-lg mt-4">
-            <div className="w-12 h-12 rounded-full border border-gray-700 flex items-center justify-center mb-4 bg-[#00FF66]/10 border-[#00FF66]/30">
-              <CheckCircle size={24} className="text-[#00FF66]" />
+          <div className="flex flex-col items-center justify-center py-16 bg-[#0B1221] border-2 border-[#00FF66]/40 rounded-lg mt-4 shadow-[0_0_30px_rgba(0,255,102,0.15)] text-center px-4">
+            <div className="w-16 h-16 rounded-full border-2 border-[#00FF66] flex items-center justify-center mb-4 bg-[#00FF66]/15 shadow-[0_0_20px_rgba(0,255,102,0.3)]">
+              <CheckCircle size={32} className="text-[#00FF66]" />
             </div>
-            <h3 className="text-white mb-1 font-bold font-mono text-sm">All systems nominal for {activeSatName}</h3>
-            <p className="text-gray-400 font-mono text-xs mb-4">No active incidents matching your filter criteria.</p>
-            <button
-              onClick={() => setSatelliteFilter(null)}
-              className="px-4 py-2 rounded bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] font-mono text-xs font-bold uppercase transition-colors"
-            >
-              ← Return to CubeSat Fleet
-            </button>
+            <h3 className="text-white mb-2 font-bold font-mono text-base uppercase tracking-wider">
+              {unresolvedCount === 0 ? '🎉 ALL ERRORS COMPLETED & RESOLVED BY AI!' : `All active incidents resolved for ${activeSatName}`}
+            </h3>
+            <p className="text-gray-300 font-mono text-xs max-w-md mb-6 leading-relaxed">
+              {unresolvedCount === 0
+                ? 'All telemetry anomalies across the fleet have been successfully mitigated and removed from the active alert section. Flight envelope is 100% nominal.'
+                : 'No active incidents matching your filter criteria. Resolved incidents have been moved to the Resolved Archive.'}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={() => setIncidentCategory('RESOLVED')}
+                className="px-4 py-2 rounded bg-[#00FF66]/20 hover:bg-[#00FF66]/30 border border-[#00FF66] text-[#00FF66] font-mono text-xs font-bold uppercase transition-colors"
+              >
+                📜 VIEW RESOLVED ARCHIVE ({currentSatAlerts.filter(a => a.severity === 'RESOLVED').length})
+              </button>
+              <button
+                onClick={() => setSatelliteFilter(null)}
+                className="px-4 py-2 rounded bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 border border-[#00F0FF] text-[#00F0FF] font-mono text-xs font-bold uppercase transition-colors"
+              >
+                ← RETURN TO CUBESAT FLEET
+              </button>
+            </div>
           </div>
         ) : (
           filteredAlerts.map(alert => {
@@ -198,12 +265,15 @@ export default function AlertsDetailView({
 
             return (
               <div 
+                id={`alert-card-${alert._id}`}
                 key={alert._id} 
                 className={`bg-[#0B1221] rounded-lg overflow-hidden transition-all duration-300 ${
                   isCritical 
                     ? 'border border-[#FF2A2A] shadow-[0_0_25px_rgba(255,42,42,0.12)]' 
                     : isWarning 
                     ? 'border border-[#FFB000] shadow-[0_0_20px_rgba(255,176,0,0.10)]' 
+                    : isResolved
+                    ? 'border border-[#00FF66]/50 shadow-[0_0_25px_rgba(0,255,102,0.15)]'
                     : 'border border-gray-800'
                 }`}
               >
@@ -232,6 +302,57 @@ export default function AlertsDetailView({
                       <Eye size={12} />
                       <span>{activeSatName}</span>
                     </button>
+
+                    {/* Live Error Resolution Refresh Button */}
+                    <button
+                      onClick={() => handleCheckAlertStatus(alert)}
+                      disabled={checkingAlerts[alert._id]}
+                      className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded font-mono text-xs font-bold tracking-wider uppercase transition-all duration-200 border group ${
+                        checkingAlerts[alert._id]
+                          ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/60 cursor-wait shadow-[0_0_12px_rgba(0,240,255,0.2)]'
+                          : isResolved
+                          ? 'bg-[#00FF66]/10 text-[#00FF66] border-[#00FF66]/30 hover:bg-[#00FF66]/20'
+                          : 'bg-[#12192b] hover:bg-[#00F0FF]/15 text-gray-300 hover:text-[#00F0FF] border-gray-700 hover:border-[#00F0FF]/40'
+                      }`}
+                      title="Check if this CubeSat error has resolved or is still active"
+                    >
+                      <RefreshCw 
+                        size={11} 
+                        className={`transition-transform duration-500 ${
+                          checkingAlerts[alert._id] 
+                            ? 'animate-spin text-[#00F0FF]' 
+                            : 'text-gray-400 group-hover:text-[#00F0FF] group-hover:rotate-180'
+                        }`} 
+                      />
+                      <span>
+                        {checkingAlerts[alert._id] 
+                          ? 'CHECKING...' 
+                          : isResolved 
+                          ? 'RESOLVED ✓' 
+                          : 'REFRESH STATUS'}
+                      </span>
+                    </button>
+
+                    {/* Instant Status Feedback Badge */}
+                    {statusFeedback[alert._id] && !isResolved && (
+                      <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded font-mono text-[10px] font-bold tracking-wider animate-in fade-in duration-200 ${
+                        statusFeedback[alert._id].isResolved
+                          ? 'bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/50 shadow-[0_0_10px_rgba(0,255,102,0.2)]'
+                          : 'bg-[#FFB000]/15 text-[#FFB000] border border-[#FFB000]/40 shadow-[0_0_10px_rgba(255,176,0,0.15)]'
+                      }`}>
+                        {statusFeedback[alert._id].isResolved ? (
+                          <>
+                            <CheckCircle size={10} className="text-[#00FF66]" />
+                            <span>RESOLVED</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle size={10} className="text-[#FFB000] animate-pulse" />
+                            <span>STILL ACTIVE ({alert.value ? `${alert.value}${alert.metric === 'Temperature' ? 'K' : '%'}` : 'ANOMALY'})</span>
+                          </>
+                        )}
+                      </span>
+                    )}
 
                     {alert.acknowledged && !isResolved && (
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/30">
@@ -357,8 +478,18 @@ export default function AlertsDetailView({
                   <AiDiagnosisCard 
                     alert={alert} 
                     activeSat={activeSat} 
+                    unresolvedCount={unresolvedCount}
+                    fleetUnresolvedCount={fleetUnresolvedCount}
+                    onStartAutoPilot={onStartAutoPilot}
+                    nextUnresolvedAlert={nextUnresolvedAlert}
+                    onResolveNextError={onResolveNextError}
+                    onFinishAll={onFinishAll}
+                    autoOpen={autoOpenAlertId === alert._id}
                     onCommandDispatched={(cmd) => {
                       console.log('Command dispatched from AI copilot:', cmd);
+                    }}
+                    onAlertResolved={() => {
+                      handleAction(alert._id, 'RESOLVE');
                     }}
                   />
                 </div>

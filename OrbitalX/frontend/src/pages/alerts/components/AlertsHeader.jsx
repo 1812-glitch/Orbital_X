@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, CheckCheck, CheckCircle } from 'lucide-react';
+import { Zap, CheckCheck, CheckCircle, Sparkles } from 'lucide-react';
 
 export default function AlertsHeader({
   satelliteFilter,
@@ -9,7 +9,9 @@ export default function AlertsHeader({
   handleAcknowledgeAll,
   handleResolveAll,
   unacknowledgedCount,
-  allResolved
+  allResolved,
+  onStartAutoPilot,
+  unresolvedCount = 0
 }) {
   return (
     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-gray-800">
@@ -39,6 +41,23 @@ export default function AlertsHeader({
 
       {/* Global Actions + Live KPI Badges */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Autonomous AI Auto-Pilot Fleet Solver Trigger */}
+        <button
+          id="auto-solve-all-ai-btn"
+          onClick={onStartAutoPilot}
+          disabled={allResolved || unresolvedCount === 0}
+          className="flex items-center space-x-2 bg-gradient-to-r from-[#00F0FF]/20 via-[#00FF66]/20 to-[#00F0FF]/20 hover:from-[#00F0FF]/35 hover:to-[#00FF66]/35 border border-[#00F0FF] hover:border-[#00FF66] text-[#00F0FF] hover:text-[#00FF66] px-4 py-2 rounded text-xs font-mono tracking-wider uppercase transition-all shadow-[0_0_20px_rgba(0,240,255,0.25)] font-bold disabled:opacity-30 disabled:pointer-events-none group"
+          title="Launch Autonomous AI Agent to sequentially diagnose and resolve all satellite anomalies"
+        >
+          <Sparkles size={14} className="text-[#00F0FF] group-hover:rotate-12 transition-transform duration-300" />
+          <span>🤖 AUTO-PILOT: SOLVE ALL WITH AI</span>
+          {unresolvedCount > 0 && (
+            <span className="bg-[#00F0FF] text-[#0A0F1F] text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono shadow-[0_0_8px_rgba(0,240,255,0.6)]">
+              {unresolvedCount}
+            </span>
+          )}
+        </button>
+
         {/* Anomaly & Fault Generator Side Panel Trigger */}
         <button 
           id="open-fault-drawer-btn"

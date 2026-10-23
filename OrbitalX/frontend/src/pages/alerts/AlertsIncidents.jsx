@@ -6,6 +6,7 @@ import AnomalyInjectorDrawer from '../../components/alerts/AnomalyInjectorDrawer
 import AlertsHeader from './components/AlertsHeader';
 import AlertsFleetGrid from './components/AlertsFleetGrid';
 import AlertsDetailView from './components/AlertsDetailView';
+import AutonomousAiSolverModal from '../../components/alerts/AutonomousAiSolverModal';
 
 export default function AlertsIncidents() {
   const [alerts, setAlerts] = useState([]);
@@ -13,14 +14,17 @@ export default function AlertsIncidents() {
   const [stats, setStats] = useState({ critical: 0, warning: 0, resolved: 0, total24h: 0 });
   const [loading, setLoading] = useState(true);
   const [isInjectorOpen, setIsInjectorOpen] = useState(false);
+  const [isAutoPilotOpen, setIsAutoPilotOpen] = useState(false);
   const { selectSatellite, openDetailModal } = useSatellite();
 
   // Navigation & Filtering
   const [satelliteFilter, setSatelliteFilter] = useState(null); // NULL by default: require selecting a CubeSat
-  const [incidentCategory, setIncidentCategory] = useState('ALL'); // ALL, CRITICAL, WARNING, RESOLVED
+  const [incidentCategory, setIncidentCategory] = useState('ACTIVE'); // ACTIVE, CRITICAL, WARNING, RESOLVED, ALL
   const [search, setSearch] = useState('');
   const [fleetSearch, setFleetSearch] = useState('');
   const [fleetFilterType, setFleetFilterType] = useState('ALL'); // ALL, CRITICAL, WARNING, NOMINAL
+  const [recentlySolvedId, setRecentlySolvedId] = useState(null);
+  const [autoOpenAlertId, setAutoOpenAlertId] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -60,6 +64,7 @@ export default function AlertsIncidents() {
       if (action === 'ACKNOWLEDGE') {
         setAlerts(prev => prev.map(a => a._id === id ? { ...a, acknowledged: true } : a));
       } else if (action === 'RESOLVE') {
+        setRecentlySolvedId(id);
         setAlerts(prev => prev.map(a => a._id === id ? { ...a, severity: 'RESOLVED', resolvedAt: new Date().toISOString() } : a));
       }
       fetchData();
@@ -150,6 +155,11 @@ export default function AlertsIncidents() {
   // Filtered alerts with search and category pills
   const filteredAlerts = useMemo(() => {
     return currentSatAlerts.filter(a => {
+      if (incidentCategory === 'ACTIVE') {
+        // Show active unresolved, or keep recently solved on-screen until user advances
+        if (a.severity === 'RESOLVED' && a._id !== recentlySolvedId) return false;
+        return true;
+      }
       if (incidentCategory === 'CRITICAL' && a.severity !== 'CRITICAL') return false;
       if (incidentCategory === 'WARNING' && a.severity !== 'WARNING') return false;
       if (incidentCategory === 'RESOLVED' && a.severity !== 'RESOLVED') return false;
@@ -162,7 +172,7 @@ export default function AlertsIncidents() {
         (a.metric && a.metric.toLowerCase().includes(q))
       );
     });
-  }, [currentSatAlerts, incidentCategory, search]);
+  }, [currentSatAlerts, incidentCategory, search, recentlySolvedId]);
 
   // Filter the main CubeSat Fleet grid
   const filteredFleetList = useMemo(() => {
@@ -260,10 +270,72 @@ export default function AlertsIncidents() {
     }
   };
 
+  const handleAutoPilotResolve = async (id, telecommand) => {
+    try {
+      await alertService.updateStatus(id, 'RESOLVE');
+      setAlerts(prev => prev.map(a => a._id === id ? { ...a, severity: 'RESOLVED', resolvedAt: new Date().toISOString() } : a));
+      setStats(prev => ({
+        ...prev,
+        critical: Math.max(0, prev.critical - 1),
+        resolved: prev.resolved + 1
+      }));
+    } catch (err) {
+      console.error('AutoPilot resolve error:', err);
+    }
+  };
+
+  const handleAutoPilotComplete = () => {
+    fetchData();
+  };
+
+  // All unresolved alerts across the entire fleet
+  const allUnresolvedAlerts = useMemo(() => {
+    return alerts.filter(a => a.severity !== 'RESOLVED');
+  }, [alerts]);
+
+  const unresolvedAlerts = useMemo(() => {
+    const pool = satelliteFilter ? currentSatAlerts : alerts;
+    return pool.filter(a => a.severity !== 'RESOLVED');
+  }, [satelliteFilter, currentSatAlerts, alerts]);
+
+  const nextUnresolvedAlert = useMemo(() => {
+    // Look for next unresolved alert on current satellite first (excluding recently solved)
+    const inCurrentSat = currentSatAlerts.find(a => a.severity !== 'RESOLVED' && a._id !== recentlySolvedId);
+    if (inCurrentSat) return inCurrentSat;
+
+    // Otherwise find next unresolved alert anywhere in the fleet (excluding recently solved)
+    return allUnresolvedAlerts.find(a => a._id !== recentlySolvedId) || null;
+  }, [currentSatAlerts, allUnresolvedAlerts, recentlySolvedId]);
+
+  const handleResolveNextError = (nextAlert) => {
+    setRecentlySolvedId(null);
+    if (!nextAlert) return;
+
+    const satObj = nextAlert.satelliteId;
+    const nextSatId = typeof satObj === 'object' ? (satObj._id || satObj.satelliteId) : satObj;
+
+    setSatelliteFilter(nextSatId);
+    setAutoOpenAlertId(nextAlert._id);
+
+    setTimeout(() => {
+      const el = document.getElementById(`alert-card-${nextAlert._id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 250);
+  };
+
+  const handleFinishAll = () => {
+    setRecentlySolvedId(null);
+    setAutoOpenAlertId(null);
+    fetchData();
+  };
+
   const activeSatKey = activeSat ? (activeSat._id || activeSat.satelliteId) : null;
   const activeSatStats = activeSatKey ? (satAlertStats[activeSatKey] || { total: 0, critical: 0, warning: 0, resolved: 0 }) : { total: 0, critical: 0, warning: 0, resolved: 0 };
   const unacknowledgedCount = (satelliteFilter ? currentSatAlerts : alerts).filter(a => !a.acknowledged && a.severity !== 'RESOLVED').length;
   const allResolved = (satelliteFilter ? currentSatAlerts : alerts).every(a => a.severity === 'RESOLVED');
+  const unresolvedCount = unresolvedAlerts.length;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-300">
@@ -276,6 +348,8 @@ export default function AlertsIncidents() {
         handleResolveAll={handleResolveAll}
         unacknowledgedCount={unacknowledgedCount}
         allResolved={allResolved}
+        onStartAutoPilot={() => setIsAutoPilotOpen(true)}
+        unresolvedCount={unresolvedCount}
       />
 
       {!satelliteFilter ? (
@@ -309,6 +383,14 @@ export default function AlertsIncidents() {
           filteredAlerts={filteredAlerts}
           generateTelemetryCurve={generateTelemetryCurve}
           handleAction={handleAction}
+          onRefreshAlerts={fetchData}
+          onStartAutoPilot={() => setIsAutoPilotOpen(true)}
+          unresolvedCount={unresolvedCount}
+          fleetUnresolvedCount={allUnresolvedAlerts.length}
+          nextUnresolvedAlert={nextUnresolvedAlert}
+          onResolveNextError={handleResolveNextError}
+          onFinishAll={handleFinishAll}
+          autoOpenAlertId={autoOpenAlertId}
         />
       )}
 
@@ -320,6 +402,17 @@ export default function AlertsIncidents() {
         onAnomalyInjected={() => {
           fetchData();
         }}
+      />
+
+      <AutonomousAiSolverModal
+        isOpen={isAutoPilotOpen}
+        onClose={() => {
+          setIsAutoPilotOpen(false);
+          fetchData();
+        }}
+        unresolvedAlerts={unresolvedAlerts}
+        onResolveAlert={handleAutoPilotResolve}
+        onCompleteAll={handleAutoPilotComplete}
       />
     </div>
   );
