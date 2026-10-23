@@ -206,17 +206,28 @@ OrbitalX incorporates defense-in-depth security validated via an automated test 
 ### Running Locally
 
 #### Option A: One-Click Launch (Windows)
-Double-click [`start.bat`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/start.bat) in the root directory. It automatically launches the backend, frontend, and opens the dashboard in your default browser!
+Double-click [`start.bat`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/start.bat) in the root directory. It automatically launches all 3 required services:
+1. **AI Anomaly & Collision Microservice** (`http://localhost:5050`)
+2. **OrbitalX Express Backend Server** (`http://localhost:4000`)
+3. **OrbitalX Mission Control Web UI** (`http://localhost:4173`)
+And automatically opens the mission control dashboard in your default browser!  
+*(To cleanly shut down all services, double-click [`stop.bat`](file:///c:/Users/RH364/OneDrive/Desktop/orbital%20desktop/stop.bat)).*
 
 #### Option B: Manual Terminal Launch
-1. **Start Backend Server**:
+1. **Start AI Diagnostic Microservice**:
+   ```bash
+   python AI/ai_inference_service.py --serve
+   ```
+   *(Starts Python Aerospace AI diagnostic engine on `http://localhost:5050`).*
+
+2. **Start Backend Server**:
    ```bash
    cd OrbitalX/backend
    npm run dev
    ```
    *(Starts Express server on `http://localhost:4000` and automatically seeds initial satellites, missions, ground stations, and admin user).*
 
-2. **Start Frontend Dev Server**:
+3. **Start Frontend Dev Server**:
    ```bash
    cd OrbitalX/frontend
    npm run dev

@@ -19,6 +19,6 @@ router.route('/')
 router.route('/:id')
   .get(getMissionById)
   .put(requireRole('ADMIN', 'OPERATOR'), updateMission)
-  .delete(requireRole('ADMIN'), deleteMission);
+  .delete(requireRole('ADMIN', 'OPERATOR'), deleteMission);
 
 module.exports = router;

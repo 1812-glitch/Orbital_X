@@ -19,6 +19,6 @@ router.route('/')
 router.route('/:id')
   .get(getSatelliteById)
   .put(requireRole('ADMIN', 'OPERATOR'), updateSatellite)
-  .delete(requireRole('ADMIN'), deleteSatellite);
+  .delete(requireRole('ADMIN', 'OPERATOR'), deleteSatellite);
 
 module.exports = router;

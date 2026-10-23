@@ -1,12 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import satelliteService from '../../services/satelliteService';
-import { Heart, Send, Wifi, Globe, Terminal, LineChart } from 'lucide-react';
+import { Heart, Send, Wifi, Globe, Terminal, LineChart, Undo2, Trash2 } from 'lucide-react';
 
 export default function SatelliteDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [satellite, setSatellite] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteSatellite = async () => {
+    if (!satellite) return;
+    const confirmDelete = window.confirm(
+      `Permanently delete satellite/CubeSat "${satellite.name}" (${satellite.satelliteId}) from MongoDB Atlas?`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await satelliteService.delete(id);
+      navigate('/satellites');
+    } catch (err) {
+      console.error('Failed to delete satellite:', err);
+      alert(err.response?.data?.message || 'Failed to delete satellite from database.');
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchSatellite = async () => {
@@ -31,7 +51,21 @@ export default function SatelliteDetail() {
       {/* Top Breadcrumb Header */}
       <div className="flex items-center justify-between border-b border-gray-800 pb-4">
         <div className="flex items-center space-x-4 font-mono text-sm tracking-widest uppercase">
-          <Link to="/satellites" className="text-gray-500 hover:text-white transition-colors">Satellites</Link>
+          <button 
+            type="button"
+            onClick={() => {
+              if (window.history.state && window.history.state.idx > 0) {
+                navigate(-1);
+              } else {
+                navigate('/satellites');
+              }
+            }}
+            className="text-gray-400 hover:text-[#00F0FF] transition-colors flex items-center space-x-1.5 cursor-pointer group"
+            title="Undo / Back: Return to most immediate recently opened page"
+          >
+            <Undo2 size={14} className="text-[#00F0FF] group-hover:-rotate-45 transition-transform duration-200" />
+            <span>Satellites</span>
+          </button>
           <span className="text-gray-700">/</span>
           <span className="text-[#00F0FF]">{satellite.satelliteId}</span>
           <span className="text-gray-700">/</span>
@@ -81,12 +115,21 @@ export default function SatelliteDetail() {
 
             {/* Actions */}
             <div className="flex space-x-3">
-              <button className="border border-gray-600 hover:border-[#00F0FF] text-gray-300 hover:text-[#00F0FF] px-6 py-2.5 rounded text-[11px] font-mono tracking-widest uppercase transition-colors">
-                Mission Control
-              </button>
-              <button className="bg-[#82E6E6] hover:bg-white text-[#0A0F1F] font-bold px-6 py-2.5 rounded text-[11px] font-mono tracking-widest uppercase flex items-center space-x-2 transition-colors shadow-[0_0_15px_rgba(0,240,255,0.15)]">
-                <Send size={14} />
-                <span>Send Command</span>
+              <Link 
+                to="/satellites" 
+                className="border border-gray-600 hover:border-[#00F0FF] text-gray-300 hover:text-[#00F0FF] px-5 py-2.5 rounded text-[11px] font-mono tracking-widest uppercase transition-colors flex items-center"
+              >
+                Back to Fleet
+              </Link>
+              <button
+                type="button"
+                onClick={handleDeleteSatellite}
+                disabled={isDeleting}
+                className="bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-bold px-5 py-2.5 rounded text-[11px] font-mono tracking-widest uppercase flex items-center space-x-1.5 transition-all shadow-[0_0_12px_rgba(239,68,68,0.2)] disabled:opacity-50"
+                title="Delete satellite permanently from MongoDB Atlas"
+              >
+                <Trash2 size={13} className={isDeleting ? 'animate-spin' : ''} />
+                <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
               </button>
             </div>
           </div>

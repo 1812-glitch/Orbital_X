@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   PanelLeftClose, 
   PanelLeftOpen, 
@@ -12,7 +12,8 @@ import {
   Bell, 
   CheckCheck, 
   ExternalLink, 
-  User 
+  User,
+  Undo2
 } from 'lucide-react';
 
 const HeaderClock = React.memo(function HeaderClock() {
@@ -56,10 +57,37 @@ export default function DashboardHeader({
   handleItemClick,
   getNotifIcon
 }) {
+  const navigate = useNavigate();
+
+  const handleGoBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
   return (
     <header className="h-16 bg-[#0A0F1F] border-b border-gray-800 flex items-center justify-between px-4 sm:px-6 shrink-0 relative z-40">
       {/* Status Indicators & Mobile/Desktop Nav Toggles */}
-      <div className="flex items-center space-x-3 sm:space-x-4 text-[10px] font-mono tracking-widest uppercase">
+      <div className="flex items-center space-x-2.5 sm:space-x-3.5 text-[10px] font-mono tracking-widest uppercase">
+        {/* Global Undo / Back Navigation Button */}
+        <button
+          id="global-undo-btn"
+          type="button"
+          onClick={handleGoBack}
+          className="p-1.5 flex items-center justify-center space-x-1.5 rounded-lg border border-gray-800 hover:border-[#00F0FF] bg-[#121C36] hover:bg-[#00F0FF]/15 text-gray-300 hover:text-[#00F0FF] transition-all shadow-sm group"
+          title="Undo: Return to most immediate recently opened page"
+          aria-label="Undo to previous page"
+        >
+          <Undo2 size={16} className="text-[#00F0FF] group-hover:-rotate-45 transition-transform duration-200" />
+          <span className="hidden sm:inline text-[10px] font-mono font-bold tracking-wider text-gray-400 group-hover:text-[#00F0FF]">
+            UNDO
+          </span>
+        </button>
+
         <button
           id="desktop-sidebar-toggle-btn"
           onClick={toggleSidebar}

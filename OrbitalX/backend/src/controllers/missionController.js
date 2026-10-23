@@ -28,7 +28,7 @@ exports.getMissionById = asyncHandler(async (req, res) => {
 // @route   POST /api/missions
 // @access  Private/Admin
 exports.createMission = asyncHandler(async (req, res) => {
-  const { name, missionId, description, status, launchDate, objective, assignedSatellites } = req.body;
+  const { name, missionId, description, status, launchDate, launchSite, objective, assignedSatellites, formFactor, orbitType, cubesatDesign } = req.body;
 
   const existingMission = await Mission.findOne({ missionId });
   if (existingMission) {
@@ -41,8 +41,12 @@ exports.createMission = asyncHandler(async (req, res) => {
     description,
     status,
     launchDate,
+    launchSite,
     objective,
-    assignedSatellites
+    assignedSatellites,
+    formFactor: formFactor || '3U',
+    orbitType: orbitType || 'LEO',
+    cubesatDesign
   });
 
   res.status(201).json(new ApiResponse(201, mission, 'Mission created successfully'));
@@ -66,9 +70,9 @@ exports.updateMission = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, mission, 'Mission updated successfully'));
 });
 
-// @desc    Delete mission
+// @desc    Delete mission (completely removed from MongoDB)
 // @route   DELETE /api/missions/:id
-// @access  Private/Admin
+// @access  Private/Admin/Operator
 exports.deleteMission = asyncHandler(async (req, res) => {
   const mission = await Mission.findById(req.params.id);
 
@@ -76,7 +80,8 @@ exports.deleteMission = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Mission not found');
   }
 
+  // Completely delete document from MongoDB
   await mission.deleteOne();
 
-  res.status(200).json(new ApiResponse(200, null, 'Mission deleted successfully'));
+  res.status(200).json(new ApiResponse(200, null, `Mission ${mission.missionId} (${mission.name}) completely deleted from MongoDB`));
 });

@@ -8,7 +8,10 @@ const auditService = require('../services/auditService');
 
 // @route   POST /api/auth/register
 const register = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password } = req.body || {};
+  if (!email || !password) {
+    throw new ApiError(400, 'Email and password are required');
+  }
 
   const existingUser = await User.findOne({ email });
   if (existingUser) {
@@ -52,7 +55,10 @@ const register = asyncHandler(async (req, res) => {
 
 // @route   POST /api/auth/login
 const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    throw new ApiError(400, 'Email and password are required');
+  }
 
   const user = await User.findOne({ email });
   if (!user || !user.isActive) {

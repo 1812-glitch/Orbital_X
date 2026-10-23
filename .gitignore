@@ -57,9 +57,16 @@ $RECYCLE.BIN/
 .system_generated/
 scratch/
 
+# Python artifacts & caches
+__pycache__/
+*.py[cod]
+*$py.class
+
 # User local scratch & work folders
 FOLDER1/
 FOLDER1
 work/
 Work/
+work.txt
+work*.txt
 details

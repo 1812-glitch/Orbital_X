@@ -1,24 +1,32 @@
 @echo off
-TITLE OrbitalX System Launcher
-echo ===================================================
-echo   ORBITALX AEROSPACE FLEET MANAGEMENT SYSTEM
-echo ===================================================
+TITLE OrbitalX Mission Control Launcher
+echo ======================================================================
+echo          ORBITALX AEROSPACE FLEET & AI COPILOT LAUNCHER
+echo ======================================================================
 echo.
-echo [1/3] Starting OrbitalX Backend Server (Port 4000)...
+
+echo [1/4] Starting OrbitalX AI Anomaly & Collision Microservice (Port 5050)...
+start "OrbitalX AI Microservice" cmd /k "cd /d %~dp0AI && python ai_inference_service.py --serve"
+
+echo [2/4] Starting OrbitalX Backend Server (Port 4000)...
 start "OrbitalX Backend" cmd /k "cd /d %~dp0OrbitalX\backend && npm run dev"
 
-echo [2/3] Starting OrbitalX Frontend Web Server (Port 4173)...
+echo [3/4] Starting OrbitalX Frontend Web Server (Port 4173)...
 start "OrbitalX Frontend" cmd /k "cd /d %~dp0OrbitalX\frontend && npm run dev"
 
-echo [3/3] Waiting for servers to initialize...
+echo [4/4] Waiting for services to initialize...
 timeout /t 5 /nobreak > nul
 
 echo.
 echo Launching OrbitalX Mission Control in browser...
 start http://localhost:4173/dashboard
 echo.
-echo OrbitalX is now running!
-echo Backend API: http://localhost:4000/api/health
-echo Frontend UI: http://localhost:4173
+echo ======================================================================
+echo   OrbitalX Full-Stack Aerospace System is now running!
+echo ======================================================================
+echo   - AI Microservice : http://localhost:5050/diagnose
+echo   - Backend REST API: http://localhost:4000/api/health
+echo   - Mission Web UI  : http://localhost:4173
+echo ======================================================================
 echo.
 pause

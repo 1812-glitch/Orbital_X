@@ -3,6 +3,14 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const dns = require('dns');
+
+// Configure reliable DNS servers to resolve MongoDB Atlas SRV records on Windows
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (dnsErr) {
+  // Use system default if setServers is unavailable
+}
 
 let mongoServerInstance = null;
 
@@ -33,10 +41,15 @@ const connectDB = async () => {
   mongoose.set('bufferCommands', false);
 
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 2000 });
-    console.log(`[Database] MongoDB Connected: ${conn.connection.host}`);
+    const isAtlas = (process.env.MONGODB_URI || '').includes('mongodb+srv://') || (process.env.MONGODB_URI || '').includes('mongodb.net');
+    console.log(`[Database] Attempting connection to ${isAtlas ? 'MongoDB Atlas Cluster' : process.env.MONGODB_URI}...`);
+    
+    const conn = await mongoose.connect(process.env.MONGODB_URI, { 
+      serverSelectionTimeoutMS: isAtlas ? 15000 : 5000 
+    });
+    console.log(`[Database] SUCCESS: Connected to ${isAtlas ? 'MongoDB Atlas' : 'MongoDB'}: ${conn.connection.host} (DB: ${conn.connection.name})`);
   } catch (error) {
-    console.warn(`[Database] Failed to connect to ${process.env.MONGODB_URI}`);
+    console.warn(`[Database] Failed to connect to ${process.env.MONGODB_URI}: ${error.message}`);
     console.warn('[Database] Falling back to In-Memory MongoDB Server...');
     
     try {

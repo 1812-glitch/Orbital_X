@@ -85,3 +85,48 @@ exports.changeSimSpeed = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server Error' });
   }
 };
+
+const Mission = require('../models/Mission');
+const Satellite = require('../models/Satellite');
+const Telemetry = require('../models/Telemetry');
+const Communication = require('../models/Communication');
+const Alert = require('../models/Alert');
+
+// @desc    Clear all missions, satellites/cubesats, telemetry, communications from MongoDB
+// @route   POST /api/admin/clear-data
+// @access  Private/Admin
+exports.clearAllData = async (req, res) => {
+  try {
+    const missionRes = await Mission.deleteMany({});
+    const satRes = await Satellite.deleteMany({});
+    const telemRes = await Telemetry.deleteMany({});
+    const commRes = await Communication.deleteMany({});
+    const alertRes = await Alert.deleteMany({});
+
+    await auditService.logAction({
+      userId: req.user._id,
+      source: 'SYS_ADMIN',
+      action: 'DATA_PURGE',
+      resource: 'Database',
+      details: `Purged ${missionRes.deletedCount} missions and ${satRes.deletedCount} satellites/cubesats from MongoDB.`,
+      severity: 'CRITICAL',
+      ipAddress: req.ip
+    });
+
+    res.json({
+      success: true,
+      message: 'All missions, CubeSats, and associated telemetry completely cleared from MongoDB.',
+      data: {
+        missionsDeleted: missionRes.deletedCount,
+        satellitesDeleted: satRes.deletedCount,
+        telemetryDeleted: telemRes.deletedCount,
+        communicationsDeleted: commRes.deletedCount,
+        alertsDeleted: alertRes.deletedCount
+      }
+    });
+  } catch (error) {
+    console.error('[Admin clearAllData Error]', error);
+    res.status(500).json({ success: false, message: error.message || 'Server Error clearing database' });
+  }
+};
+

@@ -6,6 +6,8 @@
   "scripts": {
     "start:backend": "npm --prefix OrbitalX/backend run dev",
     "start:frontend": "npm --prefix OrbitalX/frontend run dev",
+    "start:ai": "python AI/ai_inference_service.py --serve",
+    "test:ai": "python AI/test_ai_diagnosis.py",
     "build": "npm --prefix OrbitalX/frontend run build",
     "test:security": "node OrbitalX/backend/tests/securityAudit.js",
     "docker:up": "docker-compose up --build -d",

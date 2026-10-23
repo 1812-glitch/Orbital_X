@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import satelliteService from '../../services/satelliteService';
-import { Search, Plus, Wifi, AlertTriangle, WifiOff, Activity } from 'lucide-react';
+import { Search, Plus, Wifi, AlertTriangle, WifiOff, Activity, Trash2, Satellite } from 'lucide-react';
 import CreateSatelliteModal from '../../components/forms/CreateSatelliteModal';
 
 export default function SatelliteFleet() {
   const [satellites, setSatellites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     fetchSatellites();
@@ -16,7 +17,7 @@ export default function SatelliteFleet() {
   const fetchSatellites = async () => {
     try {
       const data = await satelliteService.getAll();
-      setSatellites(data.data);
+      setSatellites(data.data || []);
     } catch (error) {
       console.error('Error fetching satellites:', error);
     } finally {
@@ -24,12 +25,30 @@ export default function SatelliteFleet() {
     }
   };
 
-  // Mock stats since real telemetry comes in Phase 5
+  const handleDeleteSatellite = async (e, sat) => {
+    e.stopPropagation();
+    const confirmDelete = window.confirm(
+      `Permanently delete satellite/CubeSat "${sat.name}" (${sat.satelliteId}) from MongoDB Atlas?`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      setDeletingId(sat._id);
+      await satelliteService.delete(sat._id);
+      setSatellites(prev => prev.filter(s => s._id !== sat._id));
+    } catch (err) {
+      console.error('Failed to delete satellite from MongoDB:', err);
+      alert(err.response?.data?.message || 'Failed to delete satellite from database.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const stats = {
-    total: satellites.length || 12,
-    connected: 10,
-    warning: 1,
-    critical: 1
+    total: satellites.length,
+    connected: satellites.filter(s => s.status === 'ACTIVE').length,
+    warning: 0,
+    critical: satellites.filter(s => s.status === 'OFFLINE').length
   };
 
   // Mock telemetry data for the table as approved in the plan
@@ -142,13 +161,14 @@ export default function SatelliteFleet() {
                   <th className="px-6 py-4 font-medium">Signal</th>
                   <th className="px-6 py-4 font-medium">Health</th>
                   <th className="px-6 py-4 font-medium text-right">Last Update</th>
+                  <th className="px-6 py-4 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/50">
                 {satellites.map((sat) => {
                   const telemetry = getMockTelemetry(sat.orbitType);
                   return (
-                    <tr key={sat._id} className="hover:bg-[#121C36]/30 transition-colors group cursor-pointer">
+                    <tr key={sat._id} className="hover:bg-[#121C36]/30 transition-colors group">
                       <td className="px-6 py-4">
                         <Link to={`/satellites/${sat._id}`} className="block">
                           <div className="font-bold text-white group-hover:text-[#00F0FF] transition-colors">{sat.name.toUpperCase()}</div>
@@ -175,6 +195,17 @@ export default function SatelliteFleet() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right text-gray-500 text-[11px]">10:42:31 UTC</td>
+                      <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteSatellite(e, sat)}
+                          disabled={deletingId === sat._id}
+                          className="p-1.5 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all disabled:opacity-50"
+                          title="Delete satellite permanently from MongoDB"
+                        >
+                          <Trash2 size={14} className={deletingId === sat._id ? 'animate-spin' : ''} />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
