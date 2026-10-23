@@ -27,6 +27,7 @@ export default function OrbitingSatelliteCard({
 
   return (
     <div
+      id={`sat-card-${sat.satelliteId}`}
       onClick={() => onToggle(sat.satelliteId)}
       className={`group relative p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
         isSelected

@@ -46,6 +46,8 @@ export default function OrbitingSatellitesPanel({
       if (orbitFilter === 'LEO' && sat.orbitType !== 'LEO') return false;
       if (orbitFilter === 'MEO' && sat.orbitType !== 'MEO') return false;
       if (orbitFilter === 'GEO' && sat.orbitType !== 'GEO') return false;
+      if (orbitFilter === 'SSO' && sat.orbitType !== 'SSO') return false;
+      if (orbitFilter === 'POLAR' && sat.orbitType !== 'POLAR') return false;
 
       // Filter by search query
       if (searchQuery.trim()) {
@@ -61,12 +63,6 @@ export default function OrbitingSatellitesPanel({
   }, [fleetData, orbitFilter, searchQuery]);
 
   const handleToggle = (satId) => {
-    const isSelected = selectedSatIds.includes(satId);
-    if (!isSelected && selectedSatIds.length >= MAX_SELECTED_SATELLITES) {
-      setLimitWarning(true);
-      setTimeout(() => setLimitWarning(false), 4000);
-      return;
-    }
     onToggleSatellite(satId);
   };
 
@@ -120,8 +116,7 @@ export default function OrbitingSatellitesPanel({
               item,
               groundStations
             );
-            const isMaxReached =
-              selectedSatIds.length >= MAX_SELECTED_SATELLITES && !isSelected;
+            const isMaxReached = false;
 
             return (
               <OrbitingSatelliteCard
@@ -143,16 +138,10 @@ export default function OrbitingSatellitesPanel({
       <div className="p-3 border-t border-gray-800/80 bg-[#0d1322]/80 flex items-center justify-between text-[10px] font-mono text-gray-400 shrink-0">
         <div className="flex items-center space-x-2">
           <Activity size={12} className="text-[#00F0FF]" />
-          <span>Select max {MAX_SELECTED_SATELLITES} to project 3D orbits</span>
+          <span>Select satellite to project 3D orbit & lock track</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          {SAT_SLOT_COLORS.map((color, idx) => (
-            <span
-              key={idx}
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: color }}
-            />
-          ))}
+          <span className="w-2 h-2 rounded-full bg-[#00F0FF]" />
         </div>
       </div>
     </div>

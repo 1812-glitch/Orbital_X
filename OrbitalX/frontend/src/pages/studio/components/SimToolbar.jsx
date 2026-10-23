@@ -1,6 +1,6 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { Globe2, Box, Activity, SlidersHorizontal, Play, Pause, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Globe2, Box, Activity, SlidersHorizontal, Play, Pause, ArrowLeft, Undo2, Rocket, ChevronDown, Layers } from 'lucide-react';
 import { CUBESAT_FLEET } from '../utils/cubesatFleetData';
 
 export default function SimToolbar({
@@ -15,20 +15,31 @@ export default function SimToolbar({
   autoRotate,
   setAutoRotate,
   getStatusBadge,
-  sat
+  sat,
+  onOpenFleetModal
 }) {
+  const navigate = useNavigate();
+
   return (
     <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20 gap-3">
       {/* Left: Quick Nav, Viewport Switcher & CubeSat Target */}
       <div className="pointer-events-auto flex flex-wrap items-center gap-2 bg-[#0A0F1F]/92 backdrop-blur-md border border-gray-800 rounded-xl px-3 py-1.5 shadow-2xl">
-        <NavLink
-          to="/dashboard"
-          className="flex items-center space-x-1 text-xs font-mono text-gray-400 hover:text-[#00F0FF] transition-colors pr-2 border-r border-gray-800"
-          title="Exit Simulator"
+        <button
+          type="button"
+          id="sim-undo-back-btn"
+          onClick={() => {
+            if (window.history.state && window.history.state.idx > 0) {
+              navigate(-1);
+            } else {
+              navigate('/dashboard');
+            }
+          }}
+          className="flex items-center space-x-1.5 text-xs font-mono text-gray-300 hover:text-[#00F0FF] transition-colors pr-2.5 border-r border-gray-800 cursor-pointer group"
+          title="Undo: Return to most immediate recently opened page"
         >
-          <ArrowLeft size={13} className="text-[#00F0FF]" />
-          <span className="font-bold hidden sm:inline">EXIT</span>
-        </NavLink>
+          <Undo2 size={13} className="text-[#00F0FF] group-hover:-rotate-45 transition-transform duration-200" />
+          <span className="font-bold hidden sm:inline">UNDO</span>
+        </button>
 
         {/* Viewport Mode Switcher: Earth Orbit vs Close-Up */}
         <div className="flex items-center bg-[#050810] border border-gray-800 rounded p-0.5">
@@ -58,22 +69,40 @@ export default function SimToolbar({
           </button>
         </div>
 
-        {/* Spacecraft Fleet Selector (1U up to 16U) */}
-        <div className="flex items-center bg-[#050810] border border-gray-800 rounded p-0.5 space-x-1 overflow-x-auto max-w-full">
-          {CUBESAT_FLEET.map(fleetSat => (
-            <button
-              key={fleetSat.satelliteId}
-              onClick={() => setSelectedSatId(fleetSat.satelliteId)}
-              className={`px-2 py-1 rounded text-xs font-mono transition-colors whitespace-nowrap ${
-                selectedSatId === fleetSat.satelliteId
-                  ? 'bg-[#00F0FF]/25 text-[#00F0FF] font-bold border border-[#00F0FF]/40 shadow-[0_0_8px_rgba(0,240,255,0.25)]'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
-              }`}
-              title={`${fleetSat.fullName} - ${fleetSat.formFactor} Bus`}
-            >
-              {fleetSat.name}
-            </button>
-          ))}
+        {/* Mission & Spacecraft Fleet Dispatcher Trigger */}
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            id="sim-mission-fleet-selector-btn"
+            onClick={onOpenFleetModal}
+            className="flex items-center space-x-2 px-3 py-1.5 rounded-lg font-mono text-xs font-bold border border-[#00F0FF]/60 bg-gradient-to-r from-[#00F0FF]/20 via-[#00FF66]/10 to-[#00F0FF]/15 hover:from-[#00F0FF]/30 hover:to-[#00FF66]/20 text-white transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)] group cursor-pointer"
+            title="Open Hierarchical Mission & CubeSat Dispatcher (select from missions, supports 1,000+ assets)"
+          >
+            <Rocket size={14} className="text-[#00F0FF] group-hover:scale-110 group-hover:-rotate-12 transition-transform duration-200" />
+            <div className="flex items-center space-x-1.5">
+              <span className="text-[#00F0FF] text-[10px] uppercase tracking-wider font-extrabold hidden sm:inline">
+                {sat.missionId || 'MSN-APOLLO'}:
+              </span>
+              <span className="text-white tracking-wide font-sans text-xs font-semibold">
+                {sat.name || sat.fullName || selectedSatId}
+              </span>
+              <span className="px-1.5 py-0.2 rounded bg-black/60 text-[10px] font-mono font-bold text-[#00FF66] border border-[#00FF66]/40">
+                {sat.formFactor || '3U'}
+              </span>
+            </div>
+            <ChevronDown size={13} className="text-gray-400 group-hover:text-[#00F0FF] transition-colors ml-1" />
+          </button>
+
+          {/* Quick Mission / Fleet Browser Tag */}
+          <button
+            type="button"
+            onClick={onOpenFleetModal}
+            className="hidden xl:inline-flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold text-gray-300 hover:text-[#00F0FF] hover:bg-[#12192b] border border-gray-800 hover:border-[#00F0FF]/40 transition-all cursor-pointer"
+            title="Browse all registered Missions and assigned CubeSats"
+          >
+            <Layers size={11} className="text-[#00F0FF]" />
+            <span>MISSIONS & FLEET</span>
+          </button>
         </div>
 
         {/* Status Badge */}

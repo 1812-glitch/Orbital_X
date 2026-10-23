@@ -1,14 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Scene from '../components/3d/Scene';
 import OrbitingSatellitesPanel from '../components/3d/OrbitingSatellitesPanel';
+import SatelliteInspectorHud from '../components/3d/SatelliteInspectorHud';
+import OrbitalBottomDock from '../components/3d/OrbitalBottomDock';
+import OrbitTypesLegend from '../components/3d/OrbitTypesLegend';
 import OrbitalViewerLoading from '../components/orbital/OrbitalViewerLoading';
 import OrbitalSidebar from '../components/orbital/OrbitalSidebar';
 import { useOrbitalViewerState } from '../hooks/useOrbitalViewerState';
-import { SlidersHorizontal, Satellite as SatIcon, Layers } from 'lucide-react';
+import { SlidersHorizontal, Satellite as SatIcon, Layers, Undo2, Rocket, ChevronDown } from 'lucide-react';
 import { SAT_SLOT_COLORS, MAX_SELECTED_SATELLITES } from '../utils/orbitalMath';
+import MissionFleetSelectorModal from '../components/common/MissionFleetSelectorModal';
 
 export default function OrbitalViewer() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sceneRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isFleetModalOpen, setIsFleetModalOpen] = useState(false);
+  const lastHandledUrlSatRef = useRef(null);
+
+  // Dynamic Simulator State
+  const [lightingMode, setLightingMode] = useState('TERMINATOR'); // 'TERMINATOR' | 'DAY' | 'NIGHT'
+  const [isPaused, setIsPaused] = useState(false);
+  const [timeScale, setTimeScale] = useState(1);
+  const [followTracking, setFollowTracking] = useState(false);
+  const [inspectorSatId, setInspectorSatId] = useState(null);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(true);
 
   const {
     fleetData,
@@ -32,30 +50,78 @@ export default function OrbitalViewer() {
     setShowLabels,
     showUplinks,
     setShowUplinks,
-    nightMode,
-    setNightMode,
     autoRotate,
     setAutoRotate,
   } = useOrbitalViewerState();
 
+  // Sync with URL query parameter (e.g. /orbit?sat=SAT-ALPHA-1)
+  useEffect(() => {
+    const sat = searchParams.get('sat') || searchParams.get('satelliteId');
+    if (sat && sat !== lastHandledUrlSatRef.current) {
+      lastHandledUrlSatRef.current = sat;
+      if (!selectedSatIds.includes(sat)) {
+        handleToggleSatellite(sat);
+      }
+      setInspectorSatId(sat);
+      setIsInspectorOpen(true);
+      navigate('/orbit', { replace: true });
+    }
+  }, [searchParams, selectedSatIds, handleToggleSatellite, navigate]);
+
+  // When a satellite is selected, set it as active inspected satellite
+  useEffect(() => {
+    if (selectedSatIds.length > 0) {
+      if (!inspectorSatId || !selectedSatIds.includes(inspectorSatId)) {
+        setInspectorSatId(selectedSatIds[selectedSatIds.length - 1]);
+      }
+      setIsInspectorOpen(true);
+    } else {
+      setFollowTracking(false);
+    }
+  }, [selectedSatIds, inspectorSatId]);
+
+  // Selected satellite record for inspector HUD
+  const activeInspectedItem = (fleetData || []).find((item) => {
+    const id = item?.satellite?.satelliteId || item?.satellite?._id;
+    return id === inspectorSatId;
+  }) || (selectedSatIds.length > 0 ? (fleetData || []).find(item => (item?.satellite?.satelliteId || item?.satellite?._id) === selectedSatIds[0]) : null);
+
+  const handleSelectSatellite = (satId) => {
+    handleToggleSatellite(satId);
+    setInspectorSatId(satId);
+    setIsInspectorOpen(true);
+  };
+
+  const handleResetCamera = () => {
+    if (sceneRef.current?.resetView) {
+      sceneRef.current.resetView();
+    }
+    setFollowTracking(false);
+  };
+
   return (
     <div className="w-full h-full relative overflow-hidden bg-[#050810] select-none animate-in fade-in duration-500">
       
-      {/* 1. Full-Bleed 3D Globe Visualization Canvas */}
+      {/* 1. Full-Bleed 4-Layer Photorealistic 3D Globe Visualization Canvas */}
       <div className="absolute inset-0 w-full h-full">
         {loading ? (
           <OrbitalViewerLoading />
         ) : (
           <Scene
+            ref={sceneRef}
             fleetData={fleetData}
             groundStations={groundStations}
             selectedSatIds={selectedSatIds}
-            onSelectSatellite={handleToggleSatellite}
+            trackedSatId={inspectorSatId || selectedSatIds[0]}
+            onSelectSatellite={handleSelectSatellite}
             showRings={showRings}
             showLabels={showLabels}
             showUplinks={showUplinks}
-            nightMode={nightMode}
             autoRotate={autoRotate}
+            followTracking={followTracking}
+            lightingMode={lightingMode}
+            timeScale={timeScale}
+            isPaused={isPaused}
           />
         )}
       </div>
@@ -65,6 +131,23 @@ export default function OrbitalViewer() {
         
         {/* Left: Mission & Orbit Mode Indicator */}
         <div className="pointer-events-auto flex flex-wrap items-center gap-2.5 bg-[#0A0F1F]/90 backdrop-blur-md border border-gray-800 rounded-xl px-3.5 py-2 shadow-xl">
+          <button
+            type="button"
+            id="orbit-undo-back-btn"
+            onClick={() => {
+              if (window.history.state && window.history.state.idx > 0) {
+                navigate(-1);
+              } else {
+                navigate('/dashboard');
+              }
+            }}
+            className="flex items-center space-x-1.5 text-xs font-mono text-gray-300 hover:text-[#00F0FF] transition-colors pr-2.5 border-r border-gray-800 cursor-pointer group"
+            title="Undo: Return to most immediate recently opened page"
+          >
+            <Undo2 size={13} className="text-[#00F0FF] group-hover:-rotate-45 transition-transform duration-200" />
+            <span className="font-bold hidden sm:inline">UNDO</span>
+          </button>
+
           <div className="flex items-center space-x-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#00F0FF] animate-ping" />
             <h1 className="text-xs sm:text-sm font-bold tracking-widest text-white uppercase font-mono">
@@ -81,23 +164,27 @@ export default function OrbitalViewer() {
             <span>Tracking:</span>
             <strong className="text-[#00F0FF]">{selectedSatIds.length}/{MAX_SELECTED_SATELLITES}</strong>
             {selectedSatIds.length > 0 && (
-              <div className="flex items-center space-x-1 pl-1.5">
-                {selectedSatIds.map((id, idx) => (
-                  <span 
-                    key={id}
-                    className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold"
-                    style={{ 
-                      backgroundColor: `${SAT_SLOT_COLORS[idx]}25`, 
-                      color: SAT_SLOT_COLORS[idx],
-                      border: `1px solid ${SAT_SLOT_COLORS[idx]}60`
-                    }}
-                  >
-                    {id}
-                  </span>
-                ))}
-              </div>
+              <span 
+                className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/25 text-[#00F0FF] border border-[#00F0FF]/60 ml-1"
+              >
+                {selectedSatIds[0]}
+              </span>
             )}
           </div>
+
+          {/* Mission & CubeSat Fleet Dispatcher Trigger */}
+          <button
+            type="button"
+            id="orbital-fleet-selector-btn"
+            onClick={() => setIsFleetModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-1 rounded-lg font-mono text-xs font-bold border border-[#00F0FF]/60 bg-gradient-to-r from-[#00F0FF]/20 via-[#00FF66]/10 to-[#00F0FF]/15 hover:from-[#00F0FF]/30 hover:to-[#00FF66]/20 text-white transition-all shadow-[0_0_12px_rgba(0,240,255,0.25)] group cursor-pointer"
+            title="Open Hierarchical Mission & CubeSat Dispatcher (select from missions, supports 1,000+ assets)"
+          >
+            <Rocket size={13} className="text-[#00F0FF] group-hover:scale-110 group-hover:-rotate-12 transition-transform duration-200" />
+            <span>MISSION FLEET</span>
+            <ChevronDown size={12} className="text-gray-400 group-hover:text-[#00F0FF] transition-colors" />
+          </button>
+
           <div className="flex items-center space-x-1.5 text-xs font-mono text-gray-400 hidden lg:flex">
             <Layers size={13} className="text-gray-500" />
             <span>Fleet: <strong>{fleetData.length}</strong></span>
@@ -109,7 +196,7 @@ export default function OrbitalViewer() {
           <button
             id="toggle-orbiters-panel-btn"
             onClick={() => setIsPanelOpen(!isPanelOpen)}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold tracking-wider transition-all border shadow-xl backdrop-blur-md ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold tracking-wider transition-all border shadow-xl backdrop-blur-md cursor-pointer ${
               isPanelOpen
                 ? 'bg-[#00F0FF]/25 border-[#00F0FF] text-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.35)]'
                 : 'bg-[#0A0F1F]/90 hover:bg-[#121C36] border-gray-700 hover:border-[#00F0FF]/50 text-gray-200'
@@ -128,7 +215,7 @@ export default function OrbitalViewer() {
           <button
             id="toggle-orbital-controls-btn"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold tracking-wider transition-all border shadow-xl backdrop-blur-md ${
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold tracking-wider transition-all border shadow-xl backdrop-blur-md cursor-pointer ${
               sidebarOpen
                 ? 'bg-[#00F0FF]/25 border-[#00F0FF] text-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.35)]'
                 : 'bg-[#0A0F1F]/90 hover:bg-[#121C36] border-gray-700 hover:border-[#00F0FF]/50 text-gray-200'
@@ -141,13 +228,13 @@ export default function OrbitalViewer() {
         </div>
       </div>
 
-      {/* 3. Closable Floating HUD Panel (Bottom-Left: OrbitingSatellitesPanel) */}
+      {/* 3. Left Closable Floating Fleet HUD (OrbitingSatellitesPanel) */}
       {!loading && (
         <OrbitingSatellitesPanel
           fleetData={fleetData}
           groundStations={groundStations}
           selectedSatIds={selectedSatIds}
-          onToggleSatellite={handleToggleSatellite}
+          onToggleSatellite={handleSelectSatellite}
           isOpen={isPanelOpen}
           onToggleOpen={() => setIsPanelOpen(!isPanelOpen)}
           onClearSelection={handleClearSelection}
@@ -155,14 +242,30 @@ export default function OrbitalViewer() {
         />
       )}
 
-      {/* 4. Closable Floating Sidebar OVER the Canvas (Right: OrbitalSidebar) */}
+      {/* 4. Right Satellite Detail Inspector HUD (HORIZON Style from Reference Screenshot) */}
+      {selectedSatIds.length > 0 && isInspectorOpen && activeInspectedItem && (
+        <div className={`absolute top-16 z-30 transition-all duration-300 ${sidebarOpen ? 'right-84 sm:right-92' : 'right-3'}`}>
+          <SatelliteInspectorHud
+            satelliteItem={activeInspectedItem}
+            selectedSatIds={selectedSatIds}
+            activeSatId={inspectorSatId}
+            onSelectActiveSatId={(id) => setInspectorSatId(id)}
+            onDeselectSatellite={(id) => handleToggleSatellite(id)}
+            followTracking={followTracking}
+            onToggleTracking={() => setFollowTracking(!followTracking)}
+            onClose={() => setIsInspectorOpen(false)}
+          />
+        </div>
+      )}
+
+      {/* 5. Closable Floating Controls Sidebar OVER the Canvas (Right: OrbitalSidebar) */}
       {sidebarOpen && (
-        <div className="absolute top-16 right-3 bottom-3 w-80 sm:w-88 z-30 bg-[#0A0F1F]/92 backdrop-blur-lg border border-gray-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col animate-in slide-in-from-right duration-250">
+        <div className="absolute top-16 right-3 bottom-3 w-80 sm:w-88 z-40 bg-[#0A0F1F]/95 backdrop-blur-lg border border-gray-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col animate-in slide-in-from-right duration-250">
           <OrbitalSidebar
             onClose={() => setSidebarOpen(false)}
             targets={filteredSidebarTargets}
             selectedSatIds={selectedSatIds}
-            onToggleSatellite={handleToggleSatellite}
+            onToggleSatellite={handleSelectSatellite}
             searchQuery={sidebarSearch}
             onSearchChange={setSidebarSearch}
             groundStations={groundStations}
@@ -172,13 +275,52 @@ export default function OrbitalViewer() {
             setShowLabels={setShowLabels}
             showUplinks={showUplinks}
             setShowUplinks={setShowUplinks}
-            nightMode={nightMode}
-            setNightMode={setNightMode}
+            nightMode={lightingMode === 'NIGHT'}
+            setNightMode={(isNight) => setLightingMode(isNight ? 'NIGHT' : 'DAY')}
             autoRotate={autoRotate}
             setAutoRotate={setAutoRotate}
           />
         </div>
       )}
+
+      {/* 6. Bottom-Left Orbit Types Legend (Matches Screenshot, repositions cleanly when Fleet HUD is open) */}
+      <div className={`absolute bottom-4 z-20 pointer-events-auto transition-all duration-300 hidden sm:block ${isPanelOpen ? 'left-84 sm:left-100' : 'left-3'}`}>
+        <OrbitTypesLegend />
+      </div>
+
+      {/* 7. Bottom-Center Cyber Dock / Controls (Matches Screenshot) */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+        <OrbitalBottomDock
+          isPaused={isPaused}
+          onTogglePause={() => setIsPaused(!isPaused)}
+          timeScale={timeScale}
+          onChangeTimeScale={setTimeScale}
+          lightingMode={lightingMode}
+          onChangeLightingMode={setLightingMode}
+          showLabels={showLabels}
+          onToggleLabels={() => setShowLabels(!showLabels)}
+          showOrbits={showRings}
+          onToggleOrbits={() => setShowRings(!showRings)}
+          onResetView={handleResetCamera}
+          followTracking={followTracking}
+          onToggleTracking={() => setFollowTracking(!followTracking)}
+          hasSelectedSat={selectedSatIds.length > 0}
+        />
+      </div>
+
+      {/* Hierarchical Mission & CubeSat Fleet Selector Modal */}
+      <MissionFleetSelectorModal
+        isOpen={isFleetModalOpen}
+        onClose={() => setIsFleetModalOpen(false)}
+        selectedSatIds={selectedSatIds}
+        multiSelect={true}
+        onSelectSatellite={(satObj) => {
+          handleSelectSatellite(satObj.satelliteId);
+        }}
+        title="Orbital Viewer Fleet Dispatcher"
+        subtitle="Filter by Mission or search 1,000+ CubeSats to track on the 3D globe"
+        actionLabel="TRACK ON GLOBE"
+      />
     </div>
   );
 }

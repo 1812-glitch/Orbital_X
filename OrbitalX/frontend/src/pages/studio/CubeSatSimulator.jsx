@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Flame, 
   Camera, 
@@ -15,11 +16,15 @@ import SimToolbar from './components/SimToolbar';
 import SimTelemetryDrawer from './components/SimTelemetryDrawer';
 import SimCommandConsole from './components/SimCommandConsole';
 import SimBottomBar from './components/SimBottomBar';
+import MissionFleetSelectorModal from '../../components/common/MissionFleetSelectorModal';
 
 export { CUBESAT_FLEET };
 
 export default function CubeSatSimulator() {
-  const [selectedSatId, setSelectedSatId] = useState('CUBESAT-ION');
+  const [searchParams] = useSearchParams();
+  const urlSat = searchParams.get('sat') || searchParams.get('satelliteId');
+  const [selectedSatId, setSelectedSatId] = useState(urlSat || 'CUBESAT-ION');
+  const [isFleetModalOpen, setIsFleetModalOpen] = useState(false);
   const [simState, setSimState] = useState(null);
   const [, setLoading] = useState(true);
   const [autoRotate, setAutoRotate] = useState(true);
@@ -63,6 +68,14 @@ export default function CubeSatSimulator() {
     };
     fetchGroundStations();
   }, []);
+
+  // Sync with URL query parameter (e.g. ?sat=SAT-ALPHA-1)
+  useEffect(() => {
+    const param = searchParams.get('sat') || searchParams.get('satelliteId');
+    if (param && param !== selectedSatId) {
+      setSelectedSatId(param);
+    }
+  }, [searchParams]);
 
   // Initial fetch and polling every 4 seconds
   useEffect(() => {
@@ -323,6 +336,7 @@ export default function CubeSatSimulator() {
         setAutoRotate={setAutoRotate}
         getStatusBadge={getStatusBadge}
         sat={sat}
+        onOpenFleetModal={() => setIsFleetModalOpen(true)}
       />
 
       {/* 3. CLOSABLE FLOATING METRICS & SUBSYSTEMS HUD */}
@@ -355,6 +369,20 @@ export default function CubeSatSimulator() {
 
       {/* 5. FLOATING BOTTOM FLIGHT TELEMETRY HUD */}
       <SimBottomBar sat={sat} />
+
+      {/* 6. HIERARCHICAL MISSION & CUBESAT FLEET SELECTOR MODAL */}
+      <MissionFleetSelectorModal
+        isOpen={isFleetModalOpen}
+        onClose={() => setIsFleetModalOpen(false)}
+        selectedSatId={selectedSatId}
+        onSelectSatellite={(satObj) => {
+          setSelectedSatId(satObj.satelliteId);
+          setSimState(satObj);
+        }}
+        title="CubeSat Simulator Asset Selector"
+        subtitle="Filter by Mission or search 1,000+ CubeSats to simulate in 3D orbit"
+        actionLabel="SIMULATE SPACECRAFT"
+      />
 
     </div>
   );

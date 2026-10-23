@@ -1,35 +1,49 @@
 import * as THREE from 'three';
-import { getSatSeed } from '../../../utils/orbitalMath';
+import { getSatSeed, getKeplerianOrbitalCoords } from '../../../utils/orbitalMath';
 
 /**
  * Builds the volumetric 3D orbital ring tube for Earth globe visualization.
  */
-export function buildOrbitalRingMesh(satId, inclination, visualAlt) {
+export function buildOrbitalRingMesh(satId, inclination, visualAlt, globe = null) {
   const numSegments = 240;
   const points = [];
   const seed = getSatSeed(satId);
-  const nodeLng = ((seed * 73) % 360) * (Math.PI / 180);
+  const nodeLngRad = ((seed * 73) % 360) * (Math.PI / 180);
   const incRad = (inclination * Math.PI) / 180;
-  const r = 100 * (1 + visualAlt);
 
   for (let i = 0; i <= numSegments; i++) {
     const u = (i / numSegments) * 2 * Math.PI;
-    const x = r * (Math.sin(nodeLng) * Math.cos(u) + Math.cos(nodeLng) * Math.cos(incRad) * Math.sin(u));
-    const y = r * (Math.sin(incRad) * Math.sin(u));
-    const z = r * (Math.cos(nodeLng) * Math.cos(u) - Math.sin(nodeLng) * Math.cos(incRad) * Math.sin(u));
-    points.push(new THREE.Vector3(x, y, z));
+    const pt = getKeplerianOrbitalCoords(u, incRad, nodeLngRad, visualAlt, globe);
+    points.push(new THREE.Vector3(pt.x, pt.y, pt.z));
   }
 
   const curve = new THREE.CatmullRomCurve3(points, true);
-  const tubeGeo = new THREE.TubeGeometry(curve, 240, 0.28, 8, true);
+  const group = new THREE.Group();
+
+  // Core high-intensity neon tube
+  const tubeGeo = new THREE.TubeGeometry(curve, 240, 0.35, 8, true);
   const tubeMat = new THREE.MeshBasicMaterial({
     color: 0x00F0FF,
     transparent: true,
-    opacity: 0.85,
+    opacity: 0.95,
     depthTest: true
   });
-  return new THREE.Mesh(tubeGeo, tubeMat);
+  group.add(new THREE.Mesh(tubeGeo, tubeMat));
+
+  // Outer ambient glow tube
+  const glowGeo = new THREE.TubeGeometry(curve, 180, 0.70, 6, true);
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: 0x00F0FF,
+    transparent: true,
+    opacity: 0.35,
+    blending: THREE.AdditiveBlending,
+    depthTest: true
+  });
+  group.add(new THREE.Mesh(glowGeo, glowMat));
+
+  return group;
 }
+
 
 /**
  * Builds the high-detail 3D CubeSat bus model for Earth globe visualization.

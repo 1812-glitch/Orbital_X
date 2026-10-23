@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search } from 'lucide-react';
 
-const ORBIT_FILTER_OPTIONS = ['ALL', 'CUBESAT', 'LEO', 'MEO', 'GEO'];
+const ORBIT_FILTER_OPTIONS = ['ALL', 'CUBESAT', 'LEO', 'MEO', 'GEO', 'SSO', 'POLAR'];
 
 export default function OrbitingSatellitesFilterBar({
   searchQuery,
@@ -53,11 +53,12 @@ export default function OrbitingSatellitesFilterBar({
 
         <div className="flex items-center space-x-1.5">
           <button
+            id="btn-track-top-sat"
             onClick={onSelectTop3}
             className="px-2 py-0.5 rounded text-[10px] font-mono text-[#00F0FF] hover:bg-[#00F0FF]/10 border border-[#00F0FF]/30 transition-colors cursor-pointer"
-            title="Quickly track top 3 active orbiters"
+            title="Quickly track top active orbiter"
           >
-            Top 3
+            Track Top
           </button>
           {selectedCount > 0 && (
             <button

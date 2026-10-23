@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import telemetryService from '../services/telemetryService';
 import { groundStationService } from '../services/groundStationService';
 import { MAX_SELECTED_SATELLITES } from '../utils/orbitalMath';
@@ -16,6 +16,7 @@ export function useOrbitalViewerState() {
   const [selectedSatIds, setSelectedSatIds] = useState([]);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [sidebarSearch, setSidebarSearch] = useState('');
+
 
   // Display Controls State
   const [showRings, setShowRings] = useState(true);
@@ -35,14 +36,6 @@ export function useOrbitalViewerState() {
       const stations = gsRes.data || [];
       setFleetData(fleet);
       setGroundStations(stations);
-
-      // Initialize default selection with first 2 satellites if selection is empty
-      setSelectedSatIds((prev) => {
-        if (prev.length === 0 && fleet.length > 0) {
-          return fleet.slice(0, 2).map((f) => f.satellite.satelliteId);
-        }
-        return prev;
-      });
     } catch (err) {
       console.error('Failed to fetch fleet telemetry for 3D viewer', err);
     } finally {
@@ -57,16 +50,13 @@ export function useOrbitalViewerState() {
     return () => clearInterval(interval);
   }, [fetchFleetData]);
 
-  // Handlers for satellite selection
+  // Handlers for satellite selection (Single satellite mode: limited to 1)
   const handleToggleSatellite = useCallback((satId) => {
     setSelectedSatIds((prev) => {
       if (prev.includes(satId)) {
-        return prev.filter((id) => id !== satId);
+        return [];
       }
-      if (prev.length >= MAX_SELECTED_SATELLITES) {
-        return prev; // Enforce maximum 3
-      }
-      return [...prev, satId];
+      return [satId];
     });
   }, []);
 
@@ -75,8 +65,8 @@ export function useOrbitalViewerState() {
   }, []);
 
   const handleSelectTop3 = useCallback(() => {
-    const top3 = fleetData.slice(0, MAX_SELECTED_SATELLITES).map((f) => f.satellite.satelliteId);
-    setSelectedSatIds(top3);
+    const topSat = fleetData.length > 0 ? [fleetData[0].satellite.satelliteId] : [];
+    setSelectedSatIds(topSat);
   }, [fleetData]);
 
   // Filter sidebar tracking targets
