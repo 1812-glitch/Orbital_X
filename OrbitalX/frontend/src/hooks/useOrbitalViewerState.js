@@ -18,11 +18,10 @@ export function useOrbitalViewerState() {
   const [sidebarSearch, setSidebarSearch] = useState('');
 
 
-  // Display Controls State
+  // Display Controls State (showRings defaults to true for orbital simulation)
   const [showRings, setShowRings] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showUplinks, setShowUplinks] = useState(true);
-  const [nightMode, setNightMode] = useState(true);
   const [autoRotate, setAutoRotate] = useState(true);
 
   // Data fetching routine
@@ -106,8 +105,6 @@ export function useOrbitalViewerState() {
     setShowLabels,
     showUplinks,
     setShowUplinks,
-    nightMode,
-    setNightMode,
     autoRotate,
     setAutoRotate,
   };

@@ -1,11 +1,12 @@
 import React from 'react';
-import { PlusCircle, Play, RefreshCw } from 'lucide-react';
+import { PlusCircle, Play, RefreshCw, X } from 'lucide-react';
 
 function CustomFaultForm({
   customFault,
   setCustomFault,
   onSubmit,
-  isSubmitting
+  isSubmitting,
+  onCancel
 }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -128,24 +129,37 @@ function CustomFaultForm({
           />
         </div>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full py-2.5 rounded bg-[#FFB000] hover:bg-[#e09b00] text-black font-bold uppercase tracking-wider text-xs transition-all flex items-center justify-center space-x-2 shadow-[0_0_15px_rgba(255,176,0,0.2)]"
-        >
-          {isSubmitting ? (
-            <>
-              <RefreshCw size={13} className="animate-spin" />
-              <span>DISPATCHING CUSTOM FAULT...</span>
-            </>
-          ) : (
-            <>
-              <Play size={13} />
-              <span>DISPATCH CUSTOM ANOMALY TO CUBESAT</span>
-            </>
+        {/* Action Buttons: Cancel + Submit */}
+        <div className="flex items-center space-x-2 pt-1">
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex-1 py-2.5 rounded bg-gray-800/80 hover:bg-gray-700 border border-gray-600 text-gray-300 hover:text-white font-bold uppercase tracking-wider text-xs transition-all flex items-center justify-center space-x-1.5"
+            >
+              <X size={13} />
+              <span>CANCEL</span>
+            </button>
           )}
-        </button>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={`${onCancel ? 'flex-[2]' : 'w-full'} py-2.5 rounded bg-[#FFB000] hover:bg-[#e09b00] text-black font-bold uppercase tracking-wider text-xs transition-all flex items-center justify-center space-x-2 shadow-[0_0_15px_rgba(255,176,0,0.2)]`}
+          >
+            {isSubmitting ? (
+              <>
+                <RefreshCw size={13} className="animate-spin" />
+                <span>DISPATCHING...</span>
+              </>
+            ) : (
+              <>
+                <Play size={13} />
+                <span>DISPATCH FAULT</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </form>
   );

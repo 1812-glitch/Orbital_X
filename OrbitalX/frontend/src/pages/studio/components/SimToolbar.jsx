@@ -1,11 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Globe2, Box, Activity, SlidersHorizontal, Play, Pause, ArrowLeft, Undo2, Rocket, ChevronDown, Layers } from 'lucide-react';
-import { CUBESAT_FLEET } from '../utils/cubesatFleetData';
+import { Box, Activity, SlidersHorizontal, Play, Pause, Undo2, Rocket, ChevronDown, Layers } from 'lucide-react';
 
 export default function SimToolbar({
-  viewportMode,
-  setViewportMode,
   selectedSatId,
   setSelectedSatId,
   metricsOpen,
@@ -22,7 +19,7 @@ export default function SimToolbar({
 
   return (
     <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20 gap-3">
-      {/* Left: Quick Nav, Viewport Switcher & CubeSat Target */}
+      {/* Left: Quick Nav, Spacecraft Mode Badge & CubeSat Target */}
       <div className="pointer-events-auto flex flex-wrap items-center gap-2 bg-[#0A0F1F]/92 backdrop-blur-md border border-gray-800 rounded-xl px-3 py-1.5 shadow-2xl">
         <button
           type="button"
@@ -41,32 +38,10 @@ export default function SimToolbar({
           <span className="font-bold hidden sm:inline">UNDO</span>
         </button>
 
-        {/* Viewport Mode Switcher: Earth Orbit vs Close-Up */}
-        <div className="flex items-center bg-[#050810] border border-gray-800 rounded p-0.5">
-          <button
-            id="cubesat-viewmode-earth-btn"
-            onClick={() => setViewportMode('EARTH_ORBIT')}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
-              viewportMode === 'EARTH_ORBIT'
-                ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Globe2 size={13} />
-            <span className="hidden sm:inline">EARTH ORBIT</span>
-          </button>
-          <button
-            id="cubesat-viewmode-closeup-btn"
-            onClick={() => setViewportMode('CLOSEUP')}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
-              viewportMode === 'CLOSEUP'
-                ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.3)]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Box size={13} />
-            <span className="hidden sm:inline">SPACECRAFT</span>
-          </button>
+        {/* Spacecraft Simulator Active Badge */}
+        <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-mono bg-[#050810] border border-gray-800 text-[#00F0FF]">
+          <Box size={13} className="text-[#00F0FF]" />
+          <span className="font-bold hidden sm:inline tracking-wider">SPACECRAFT</span>
         </div>
 
         {/* Mission & Spacecraft Fleet Dispatcher Trigger */}
@@ -76,13 +51,15 @@ export default function SimToolbar({
             id="sim-mission-fleet-selector-btn"
             onClick={onOpenFleetModal}
             className="flex items-center space-x-2 px-3 py-1.5 rounded-lg font-mono text-xs font-bold border border-[#00F0FF]/60 bg-gradient-to-r from-[#00F0FF]/20 via-[#00FF66]/10 to-[#00F0FF]/15 hover:from-[#00F0FF]/30 hover:to-[#00FF66]/20 text-white transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)] group cursor-pointer"
-            title="Open Hierarchical Mission & CubeSat Dispatcher (select from missions, supports 1,000+ assets)"
+            title="Open Spacecraft Fleet Selector"
           >
             <Rocket size={14} className="text-[#00F0FF] group-hover:scale-110 group-hover:-rotate-12 transition-transform duration-200" />
             <div className="flex items-center space-x-1.5">
-              <span className="text-[#00F0FF] text-[10px] uppercase tracking-wider font-extrabold hidden sm:inline">
-                {sat.missionId || 'MSN-APOLLO'}:
-              </span>
+              {sat.missionId ? (
+                <span className="text-[#00F0FF] text-[10px] uppercase tracking-wider font-extrabold hidden sm:inline">
+                  {sat.missionId}:
+                </span>
+              ) : null}
               <span className="text-white tracking-wide font-sans text-xs font-semibold">
                 {sat.name || sat.fullName || selectedSatId}
               </span>

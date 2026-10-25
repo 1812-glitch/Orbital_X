@@ -1,38 +1,67 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Flame, 
   Camera, 
   DownloadCloud, 
-  RefreshCw,
-  ShieldAlert
+  RefreshCw, 
+  ShieldAlert,
+  Box
 } from 'lucide-react';
 import CubeSatSimulationCanvas from './CubeSatSimulationCanvas';
-import CubeSatGlobeView from './CubeSatGlobeView';
 import cubesatSimService from '../../services/cubesatSimService';
-import { groundStationService } from '../../services/groundStationService';
-import { CUBESAT_FLEET } from './utils/cubesatFleetData';
+import satelliteService from '../../services/satelliteService';
+import { synthesizeCubeSatSim, CUBESAT_FLEET } from './utils/cubesatFleetData';
 import SimToolbar from './components/SimToolbar';
 import SimTelemetryDrawer from './components/SimTelemetryDrawer';
 import SimCommandConsole from './components/SimCommandConsole';
 import SimBottomBar from './components/SimBottomBar';
 import MissionFleetSelectorModal from '../../components/common/MissionFleetSelectorModal';
+import { useSatellite } from '../../context/SatelliteContext';
 
 export { CUBESAT_FLEET };
 
 export default function CubeSatSimulator() {
-  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { satellites: ctxSatellites = [], selectedSatellite, selectSatellite, loading: satLoading } = useSatellite() || {};
+  const [localSatellites, setLocalSatellites] = useState([]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const urlSat = searchParams.get('sat') || searchParams.get('satelliteId');
-  const [selectedSatId, setSelectedSatId] = useState(urlSat || 'CUBESAT-ION');
+
+  // Fallback direct load if context is empty
+  useEffect(() => {
+    let isMounted = true;
+    if (!ctxSatellites || ctxSatellites.length === 0) {
+      satelliteService.getAll()
+        .then(res => {
+          if (isMounted && res.data && res.data.length > 0) {
+            setLocalSatellites(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, [ctxSatellites]);
+
+  const satellites = (ctxSatellites && ctxSatellites.length > 0) ? ctxSatellites : localSatellites;
+
+  // Determine initial satellite ID from existing satellites in DB
+  const initialSat = useMemo(() => {
+    if (urlSat) {
+      const match = satellites.find(s => s.satelliteId === urlSat || s._id === urlSat || s.name === urlSat);
+      if (match) return match;
+    }
+    if (selectedSatellite) return selectedSatellite;
+    return satellites[0] || null;
+  }, [urlSat, satellites, selectedSatellite]);
+
+  const [selectedSatId, setSelectedSatId] = useState(() => initialSat?.satelliteId || initialSat?._id || '');
   const [isFleetModalOpen, setIsFleetModalOpen] = useState(false);
   const [simState, setSimState] = useState(null);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [autoRotate, setAutoRotate] = useState(true);
   const [cliInput, setCliInput] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
-  const [viewportMode, setViewportMode] = useState('EARTH_ORBIT'); // 'EARTH_ORBIT' | 'CLOSEUP'
-  const [groundStations, setGroundStations] = useState([]);
-  const [warpSpeed, setWarpSpeed] = useState(15);
   
   // Cold-gas thrust burst cycle: 'READY' | 'FIRING' | 'COOLDOWN'
   const [burstCycle, setBurstCycle] = useState('READY');
@@ -56,35 +85,46 @@ export default function CubeSatSimulator() {
 
   const terminalEndRef = useRef(null);
 
-  // Load ground stations once on mount
+  // Sync selectedSatId with existing satellites in database
   useEffect(() => {
-    const fetchGroundStations = async () => {
-      try {
-        const res = await groundStationService.getAllGroundStations();
-        setGroundStations(res.data || []);
-      } catch (err) {
-        console.error('Failed to load ground stations in simulator', err);
+    if (satellites.length > 0) {
+      const exists = satellites.some(s => s.satelliteId === selectedSatId || s._id === selectedSatId);
+      if (!selectedSatId || !exists) {
+        const fallback = (urlSat && satellites.find(s => s.satelliteId === urlSat || s._id === urlSat)) 
+          || selectedSatellite 
+          || satellites[0];
+        if (fallback) {
+          const targetId = fallback.satelliteId || fallback._id;
+          setSelectedSatId(targetId);
+          if (fallback !== selectedSatellite) {
+            selectSatellite(fallback);
+          }
+        }
       }
-    };
-    fetchGroundStations();
-  }, []);
+    }
+  }, [satellites, selectedSatellite, selectedSatId, urlSat, selectSatellite]);
 
-  // Sync with URL query parameter (e.g. ?sat=SAT-ALPHA-1)
+  // Sync with URL query parameter
   useEffect(() => {
     const param = searchParams.get('sat') || searchParams.get('satelliteId');
     if (param && param !== selectedSatId) {
-      setSelectedSatId(param);
+      const exists = satellites.some(s => s.satelliteId === param || s._id === param);
+      if (exists) {
+        setSelectedSatId(param);
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, satellites, selectedSatId]);
 
-  // Initial fetch and polling every 4 seconds
+  // Initial fetch and polling every 4 seconds for active satellite
   useEffect(() => {
+    if (!selectedSatId) return;
     fetchCubeSatState();
     const interval = setInterval(fetchCubeSatState, 4000);
     return () => clearInterval(interval);
   }, [selectedSatId]);
 
   const fetchCubeSatState = async () => {
+    if (!selectedSatId) return;
     try {
       const res = await cubesatSimService.getState(selectedSatId);
       if (res && res.data) {
@@ -201,7 +241,7 @@ export default function CubeSatSimulator() {
       });
     }
 
-    if (isExecuting) return;
+    if (isExecuting || !selectedSatId) return;
     setIsExecuting(true);
 
     try {
@@ -224,9 +264,73 @@ export default function CubeSatSimulator() {
     handleSendCommand(cmd);
   };
 
-  const defaultSat = CUBESAT_FLEET.find(f => f.satelliteId === selectedSatId) || CUBESAT_FLEET[1];
+  // Find the matching real satellite from database
+  const currentDbSat = useMemo(() => {
+    return satellites.find(s => s.satelliteId === selectedSatId || s._id === selectedSatId) 
+      || selectedSatellite 
+      || satellites[0] 
+      || null;
+  }, [satellites, selectedSatId, selectedSatellite]);
+
+  const defaultSat = useMemo(() => {
+    return currentDbSat ? synthesizeCubeSatSim(currentDbSat) : null;
+  }, [currentDbSat]);
+
   const sat = simState || defaultSat;
   const isThrustActive = burstCycle === 'FIRING';
+
+  // Handle loading state
+  if ((satLoading || loading) && !sat && satellites.length === 0) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-[#050810] text-white p-6 select-none animate-in fade-in duration-300">
+        <div className="max-w-md w-full bg-[#0A0F1F] border border-cyan-500/20 rounded-2xl p-8 text-center space-y-5 shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-[#00F0FF]/10 border border-[#00F0FF]/30 flex items-center justify-center mx-auto text-[#00F0FF] animate-spin">
+            <RefreshCw size={28} />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold tracking-wider font-mono text-white uppercase">CONNECTING TO ACTIVE CUBESAT TELEMETRY</h2>
+            <p className="text-xs text-gray-400 font-sans mt-2 leading-relaxed">
+              Synchronizing active constellation state and telemetry downlinks...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle case where no satellites exist in fleet
+  if (!satLoading && !loading && satellites.length === 0 && !sat) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-[#050810] text-white p-6 select-none animate-in fade-in duration-300">
+        <div className="max-w-md w-full bg-[#0A0F1F] border border-gray-800 rounded-2xl p-8 text-center space-y-5 shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-[#00F0FF]/10 border border-[#00F0FF]/30 flex items-center justify-center mx-auto text-[#00F0FF]">
+            <Box size={32} />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold tracking-wider font-mono text-white">NO ACTIVE CUBESATS</h2>
+            <p className="text-xs text-gray-400 font-sans mt-2 leading-relaxed">
+              No registered satellites or CubeSats were found in the database. Deploy a satellite to begin real-time 3D simulation.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/satellites')}
+            className="w-full py-2.5 px-4 rounded-lg bg-[#00F0FF] text-[#0A0F1F] font-mono font-bold text-xs tracking-wider hover:bg-[#00D0DF] transition-colors cursor-pointer"
+          >
+            VIEW SATELLITE FLEET
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sat) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[#050810] text-gray-400 font-mono text-xs">
+        <RefreshCw size={16} className="animate-spin text-[#00F0FF] mr-2" />
+        LOADING SATELLITE TELEMETRY...
+      </div>
+    );
+  }
 
   const getStatusBadge = (st) => {
     if (burstCycle === 'FIRING') {
@@ -296,36 +400,22 @@ export default function CubeSatSimulator() {
       
       {/* 1. FULL-BLEED 3D SIMULATION VIEWPORT CANVAS */}
       <div className="absolute inset-0 w-full h-full">
-        {viewportMode === 'EARTH_ORBIT' ? (
-          <CubeSatGlobeView
-            satellite={sat}
-            status={sat.status}
-            solarPanelsDeployed={sat.solarPanelsDeployed}
-            isThrusting={isThrustActive}
-            groundStations={groundStations}
-            warpSpeed={warpSpeed}
-            setWarpSpeed={setWarpSpeed}
-          />
-        ) : (
-          <CubeSatSimulationCanvas 
-            formFactor={sat.formFactor}
-            solarPanelsDeployed={sat.solarPanelsDeployed}
-            isThrusting={isThrustActive}
-            heaterActive={Boolean(sat.heaterActive)}
-            speed={sat.speed}
-            altitude={sat.altitude}
-            status={sat.status}
-            attitude={sat.attitude}
-            autoRotate={autoRotate}
-            showEmbeddedHud={false}
-          />
-        )}
+        <CubeSatSimulationCanvas 
+          formFactor={sat.formFactor}
+          solarPanelsDeployed={sat.solarPanelsDeployed}
+          isThrusting={isThrustActive}
+          heaterActive={Boolean(sat.heaterActive)}
+          speed={sat.speed}
+          altitude={sat.altitude}
+          status={sat.status}
+          attitude={sat.attitude}
+          autoRotate={autoRotate}
+          showEmbeddedHud={false}
+        />
       </div>
 
       {/* 2. FLOATING TOP TOOLBAR OVER THE CANVAS */}
       <SimToolbar
-        viewportMode={viewportMode}
-        setViewportMode={setViewportMode}
         selectedSatId={selectedSatId}
         setSelectedSatId={setSelectedSatId}
         metricsOpen={metricsOpen}
@@ -376,11 +466,13 @@ export default function CubeSatSimulator() {
         onClose={() => setIsFleetModalOpen(false)}
         selectedSatId={selectedSatId}
         onSelectSatellite={(satObj) => {
-          setSelectedSatId(satObj.satelliteId);
+          const satId = satObj.satelliteId || satObj._id;
+          setSelectedSatId(satId);
           setSimState(satObj);
+          selectSatellite(satObj);
         }}
         title="CubeSat Simulator Asset Selector"
-        subtitle="Filter by Mission or search 1,000+ CubeSats to simulate in 3D orbit"
+        subtitle="Select any existing spacecraft from your fleet to simulate in 3D"
         actionLabel="SIMULATE SPACECRAFT"
       />
 

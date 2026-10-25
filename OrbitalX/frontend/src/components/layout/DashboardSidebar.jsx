@@ -16,7 +16,6 @@ import {
   FileBarChart, 
   PanelLeftClose, 
   Shield, 
-  AlertTriangle, 
   Settings, 
   HelpCircle,
   X 
@@ -51,33 +50,34 @@ export default function DashboardSidebar({
     <>
       {/* Sidebar (Desktop Collapsible) */}
       <aside 
-        className={`bg-[#0A0F1F] border-r border-gray-800 flex flex-col justify-between hidden md:flex shrink-0 relative z-20 transition-all duration-300 ease-in-out ${
-          sidebarOpen ? 'w-64 opacity-100' : 'w-0 border-r-0 opacity-0 overflow-hidden pointer-events-none'
+        className={`bg-[#0A0F1F] border-r border-gray-800 flex flex-col h-full hidden md:flex shrink-0 relative z-20 overflow-hidden transition-all duration-300 ease-in-out ${
+          sidebarOpen ? 'w-64 opacity-100' : 'w-0 border-r-0 opacity-0 pointer-events-none'
         }`}
       >
-        <div className="w-64 min-w-[16rem]">
-          {/* Logo & Close Button Area */}
-          <div className="h-16 flex items-center justify-between px-6 border-b border-gray-800/60">
-            <span className="text-xl font-bold tracking-wider text-[#00F0FF]">ORBITAL-X</span>
-            <button
-              id="sidebar-close-btn"
-              onClick={toggleSidebar}
-              className="p-1.5 text-gray-400 hover:text-[#00F0FF] hover:bg-[#121C36] rounded-lg transition-colors"
-              title="Close Left Navigation Panel"
-              aria-label="Close Left Navigation Panel"
-            >
-              <PanelLeftClose size={18} />
-            </button>
-          </div>
+        {/* Top Header: Logo & Close Button Area */}
+        <div className="h-16 flex items-center justify-between px-6 border-b border-gray-800/60 shrink-0 w-64 min-w-[16rem]">
+          <span className="text-xl font-bold tracking-wider text-[#00F0FF]">ORBITAL-X</span>
+          <button
+            id="sidebar-close-btn"
+            onClick={toggleSidebar}
+            className="p-1.5 text-gray-400 hover:text-[#00F0FF] hover:bg-[#121C36] rounded-lg transition-colors cursor-pointer"
+            title="Close Left Navigation Panel"
+            aria-label="Close Left Navigation Panel"
+          >
+            <PanelLeftClose size={18} />
+          </button>
+        </div>
 
-          {/* Nav Links */}
-          <nav className="mt-8 px-4 space-y-2">
+        {/* Scrollable Navigation & Content Above Profile */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar w-64 min-w-[16rem] py-4 space-y-6">
+          {/* Main Nav Links */}
+          <nav className="px-4 space-y-1.5">
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center px-4 py-3 rounded font-mono text-sm tracking-wider transition-colors ${
+                  `flex items-center px-4 py-2.5 rounded font-mono text-sm tracking-wider transition-colors ${
                     isActive || (item.name === 'Overview' && location.pathname === '/dashboard') || (item.name === 'Satellites' && location.pathname.includes('/satellites')) || (item.name === 'Orbital Viewer' && location.pathname === '/orbit')
                       ? 'bg-gradient-to-r from-[#00F0FF]/20 to-transparent text-[#00F0FF] border-l-2 border-[#00F0FF]'
                       : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
@@ -92,7 +92,7 @@ export default function DashboardSidebar({
           
           {/* Admin Section */}
           {user?.role === 'ADMIN' && (
-            <div className="mt-8">
+            <div>
               <div className="px-6 mb-2 flex items-center space-x-2 text-gray-500 font-mono text-[10px] uppercase tracking-widest">
                 <Shield size={12} className="text-[#FF2A2A]" />
                 <span>Admin Hub</span>
@@ -102,7 +102,7 @@ export default function DashboardSidebar({
                   to="/admin"
                   end
                   className={({ isActive }) =>
-                    `flex items-center px-4 py-2.5 rounded font-mono text-xs tracking-wider transition-colors ${
+                    `flex items-center px-4 py-2 rounded font-mono text-xs tracking-wider transition-colors ${
                       isActive ? 'bg-[#FF2A2A]/10 text-[#FF2A2A] border-l-2 border-[#FF2A2A]' : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
                     }`
                   }
@@ -112,7 +112,7 @@ export default function DashboardSidebar({
                 <NavLink
                   to="/admin/logs"
                   className={({ isActive }) =>
-                    `flex items-center px-4 py-2.5 rounded font-mono text-xs tracking-wider transition-colors ${
+                    `flex items-center px-4 py-2 rounded font-mono text-xs tracking-wider transition-colors ${
                       isActive ? 'bg-[#FF2A2A]/10 text-[#FF2A2A] border-l-2 border-[#FF2A2A]' : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
                     }`
                   }
@@ -122,32 +122,60 @@ export default function DashboardSidebar({
               </nav>
             </div>
           )}
+
+          {/* System Links (Settings & Support) */}
+          <div className="pt-3 border-t border-gray-800/60">
+            <div className="px-6 mb-2 text-gray-500 font-mono text-[10px] uppercase tracking-widest">
+              <span>System</span>
+            </div>
+            <nav className="px-4 space-y-1">
+              <NavLink
+                to="/settings"
+                className={({ isActive }) =>
+                  `flex items-center px-4 py-2 rounded font-mono text-xs tracking-wider transition-colors ${
+                    isActive
+                      ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-l-2 border-[#00F0FF]'
+                      : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
+                  }`
+                }
+              >
+                <Settings size={15} className="mr-3" /> Settings
+              </NavLink>
+              <NavLink
+                to="/support"
+                className={({ isActive }) =>
+                  `flex items-center px-4 py-2 rounded font-mono text-xs tracking-wider transition-colors ${
+                    isActive
+                      ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-l-2 border-[#00F0FF]'
+                      : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
+                  }`
+                }
+              >
+                <HelpCircle size={15} className="mr-3" /> Support
+              </NavLink>
+            </nav>
+          </div>
         </div>
 
-        {/* Bottom Actions */}
-        <div className="p-4 space-y-4 w-64 min-w-[16rem]">
-          <button className="w-full flex items-center justify-center space-x-2 border border-[#FF2A2A]/50 bg-[#FF2A2A]/5 hover:bg-[#FF2A2A]/10 text-[#FF2A2A] text-xs font-mono font-bold tracking-widest px-4 py-3 rounded transition-colors">
-            <AlertTriangle size={14} />
-            <span>EMERGENCY OVERRIDE</span>
-          </button>
-
-          <div className="space-y-1">
-            <NavLink to="/settings" className="flex items-center px-4 py-2 text-gray-400 hover:text-white font-mono text-xs tracking-wider transition-colors">
-              <Settings size={14} className="mr-3" /> Settings
-            </NavLink>
-            <NavLink to="/support" className="flex items-center px-4 py-2 text-gray-400 hover:text-white font-mono text-xs tracking-wider transition-colors">
-              <HelpCircle size={14} className="mr-3" /> Support
-            </NavLink>
-          </div>
-
-          <div className="pt-4 mt-4 border-t border-gray-800 flex items-center px-2">
-            <div className="w-8 h-8 rounded-full bg-[#121C36] flex items-center justify-center text-[#00F0FF] font-bold text-xs border border-[#00F0FF]/30">
+        {/* Pinned Bottom Profile Area - stays static at bottom left */}
+        <div className="p-3 border-t border-gray-800 bg-[#0A0F1F] shrink-0 w-64 min-w-[16rem]">
+          <NavLink
+            to="/settings/profile"
+            className="flex items-center p-2 rounded-lg hover:bg-[#121C36]/70 transition-colors group"
+            title="User Profile"
+          >
+            <div className="w-8 h-8 rounded-full bg-[#121C36] flex items-center justify-center text-[#00F0FF] font-bold text-xs border border-[#00F0FF]/30 shrink-0 group-hover:border-[#00F0FF] shadow-[0_0_8px_rgba(0,240,255,0.2)]">
               {user?.name?.charAt(0) || 'O'}
             </div>
-            <div className="ml-3">
-              <p className="text-xs font-bold text-white">{user?.name || 'Operator 09'}</p>
+            <div className="ml-3 min-w-0 flex-1">
+              <p className="text-xs font-bold text-white truncate group-hover:text-[#00F0FF] transition-colors">
+                {user?.name || 'Operator 09'}
+              </p>
+              <p className="text-[10px] font-mono text-gray-500 uppercase tracking-wider truncate">
+                {user?.role || 'Operator'}
+              </p>
             </div>
-          </div>
+          </NavLink>
         </div>
       </aside>
 
@@ -158,18 +186,21 @@ export default function DashboardSidebar({
             className="fixed inset-0 bg-black/75 backdrop-blur-sm"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="relative w-72 max-w-[85vw] bg-[#0A0F1F] border-r border-gray-800 flex flex-col justify-between h-full z-10 p-4 overflow-y-auto shadow-2xl">
-            <div>
-              <div className="h-12 flex items-center justify-between px-2 mb-4 border-b border-gray-800 pb-2">
-                <span className="text-xl font-bold tracking-wider text-[#00F0FF]">ORBITAL-X</span>
-                <button 
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="p-1 text-gray-400 hover:text-white rounded border border-gray-800"
-                  aria-label="Close navigation"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+          <aside className="relative w-72 max-w-[85vw] bg-[#0A0F1F] border-r border-gray-800 flex flex-col justify-between h-full z-10 overflow-hidden shadow-2xl">
+            {/* Mobile Header */}
+            <div className="h-14 flex items-center justify-between px-4 border-b border-gray-800 shrink-0">
+              <span className="text-xl font-bold tracking-wider text-[#00F0FF]">ORBITAL-X</span>
+              <button 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-1 text-gray-400 hover:text-white rounded border border-gray-800"
+                aria-label="Close navigation"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Mobile Scrollable Content */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-6">
               <nav className="space-y-1">
                 {NAV_ITEMS.map((item) => (
                   <NavLink
@@ -189,15 +220,86 @@ export default function DashboardSidebar({
                   </NavLink>
                 ))}
               </nav>
+
+              {user?.role === 'ADMIN' && (
+                <div>
+                  <div className="px-3.5 mb-2 flex items-center space-x-2 text-gray-500 font-mono text-[10px] uppercase tracking-widest">
+                    <Shield size={12} className="text-[#FF2A2A]" />
+                    <span>Admin Hub</span>
+                  </div>
+                  <nav className="space-y-1">
+                    <NavLink
+                      to="/admin"
+                      end
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center px-3.5 py-2 rounded font-mono text-xs tracking-wider transition-colors ${
+                          isActive ? 'bg-[#FF2A2A]/10 text-[#FF2A2A] border-l-2 border-[#FF2A2A]' : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
+                        }`
+                      }
+                    >
+                      <Shield size={15} className="mr-3" /> Admin Console
+                    </NavLink>
+                    <NavLink
+                      to="/admin/logs"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center px-3.5 py-2 rounded font-mono text-xs tracking-wider transition-colors ${
+                          isActive ? 'bg-[#FF2A2A]/10 text-[#FF2A2A] border-l-2 border-[#FF2A2A]' : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
+                        }`
+                      }
+                    >
+                      <TerminalSquare size={15} className="mr-3" /> Activity Logs
+                    </NavLink>
+                  </nav>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-gray-800/60">
+                <div className="px-3.5 mb-2 text-gray-500 font-mono text-[10px] uppercase tracking-widest">
+                  <span>System</span>
+                </div>
+                <nav className="space-y-1">
+                  <NavLink 
+                    to="/settings" 
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center px-3.5 py-2 rounded font-mono text-xs tracking-wider transition-colors ${
+                        isActive ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-l-2 border-[#00F0FF]' : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
+                      }`
+                    }
+                  >
+                    <Settings size={14} className="mr-3" /> Settings
+                  </NavLink>
+                  <NavLink 
+                    to="/support" 
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center px-3.5 py-2 rounded font-mono text-xs tracking-wider transition-colors ${
+                        isActive ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-l-2 border-[#00F0FF]' : 'text-gray-400 hover:text-white hover:bg-[#121C36]/50 border-l-2 border-transparent'
+                      }`
+                    }
+                  >
+                    <HelpCircle size={14} className="mr-3" /> Support
+                  </NavLink>
+                </nav>
+              </div>
             </div>
-            
-            <div className="pt-4 border-t border-gray-800 space-y-2">
-              <NavLink 
-                to="/settings" 
+
+            {/* Mobile Pinned Profile */}
+            <div className="p-3 border-t border-gray-800 bg-[#0A0F1F] shrink-0">
+              <NavLink
+                to="/settings/profile"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center px-3.5 py-2 text-gray-400 hover:text-white font-mono text-xs tracking-wider"
+                className="flex items-center p-2 rounded-lg hover:bg-[#121C36]/70 transition-colors"
               >
-                <Settings size={14} className="mr-3" /> Settings
+                <div className="w-8 h-8 rounded-full bg-[#121C36] flex items-center justify-center text-[#00F0FF] font-bold text-xs border border-[#00F0FF]/30 shrink-0">
+                  {user?.name?.charAt(0) || 'O'}
+                </div>
+                <div className="ml-3 min-w-0 flex-1">
+                  <p className="text-xs font-bold text-white truncate">{user?.name || 'Operator 09'}</p>
+                  <p className="text-[10px] font-mono text-gray-500 uppercase tracking-wider truncate">{user?.role || 'Operator'}</p>
+                </div>
               </NavLink>
             </div>
           </aside>

@@ -8,7 +8,9 @@ import {
   isCubeSatType,
   getSatSeed,
   getKeplerianOrbitalCoords,
-  getSatelliteOrbitalState
+  getSatelliteOrbitalState,
+  generateOrbitalPath3DPoints,
+  orientSatelliteMesh
 } from '../../utils/orbitalMath';
 import {
   EarthSurfaceShader,
@@ -24,12 +26,10 @@ import {
  *    - Background Color: #050810 (Deep obsidian space black / dark navy)
  *    - Starfield System: 3,000 particle stars, radius 200 units, depth 100 units
  *    - Deep Space Outer Rim: Concentric sphere (R = 105.0) faint indigo falloff (opacity 0.02)
- * 2. Authentic Day / Night / Terminator Transitions (Matching screenshots 1, 2, 3):
- *    - 'TERMINATOR': Physical twilight band blending day & night with specular ocean glints + cyan atmospheric halo
- *    - 'DAY': Full daylight Blue Marble texture across globe + vibrant cyan atmospheric halo
- *    - 'NIGHT': Full nocturnal Black Marble city lights texture + deep electric blue atmosphere
- * 3. Single Satellite Selector & Tracker:
- *    - Strictly limited to 1 active satellite
+ * 2. Photorealistic 4-Layer Earth:
+ *    - High-resolution Blue Marble surface texture with ocean specular reflection and relief bump mapping
+ *    - Subtle dynamic cloud canopy and radiant atmospheric Fresnel limb halo
+ * 3. Satellite Selector & Tracker:
  *    - Highlighted glowing orbital path for the selected satellite
  *    - Light, subtle orbital traces for all other satellites in the background
  *    - Real-time smooth Nadir-pointing and camera tracking
@@ -48,9 +48,10 @@ const Scene = forwardRef(function Scene({
   showStationPins = true,
   autoRotate = false,
   followTracking = false,
-  lightingMode = 'TERMINATOR', // 'TERMINATOR' | 'DAY' | 'NIGHT'
   timeScale = 1,
-  isPaused = false
+  isPaused = false,
+  lightingMode = 'DAY',
+  isNightMode = false
 }, ref) {
   const containerRef = useRef();
   const globeRef = useRef();
@@ -61,24 +62,28 @@ const Scene = forwardRef(function Scene({
   const concentricGroupRef = useRef(new THREE.Group());
   const starfieldRef = useRef(null);
   const atmosphereMeshRef = useRef(null);
-  const atmosphereRimRingRef = useRef(null);
   const deepSpaceRimRef = useRef(null);
   const cloudMeshRef = useRef(null);
   const surfaceShaderMatRef = useRef(null);
 
   const texturesLoadedRef = useRef(false);
   const texturesRef = useRef({});
-  const sunAngleRef = useRef(0.85);
   const simTimeRef = useRef(Date.now() / 1000);
   const satMeshesMapRef = useRef(new Map());
   const [arcTick, setArcTick] = useState(0);
   const lastArcTickTimeRef = useRef(0);
+  const trackingTransitionUntilRef = useRef(0);
 
-  // Expose reset camera method
+  // Expose reset camera and focus coordinates methods
   useImperativeHandle(ref, () => ({
     resetView: () => {
       if (globeRef.current) {
         globeRef.current.pointOfView({ lat: 20, lng: 0, altitude: 2.2 }, 1000);
+      }
+    },
+    focusCoordinates: (lat, lng, altitude = 1.85, ms = 1000) => {
+      if (globeRef.current && lat !== undefined && lng !== undefined) {
+        globeRef.current.pointOfView({ lat, lng, altitude }, ms);
       }
     }
   }));
@@ -279,53 +284,50 @@ const Scene = forwardRef(function Scene({
       concentricGroupRef.current.add(starfieldRef.current);
     }
 
-    if (day && night) {
-      // Core Earth Surface Shader Material (Unified GLSL handling DAY, NIGHT, and TERMINATOR seamlessly)
-      // Matches DAY_NIGHT_TRANSITION_GUIDE.md Section 5 & 6
+    if (day) {
+      // Core Earth Surface Shader Material (Day/Night Mode Toggle with Instant Crisp Switch, Zero Terminator Line)
       if (!surfaceShaderMatRef.current) {
-        const initialMode = lightingMode === 'DAY' ? 1 : lightingMode === 'NIGHT' ? 2 : 0;
+        const isNightVal = (lightingMode === 'NIGHT' || isNightMode) ? 1.0 : 0.0;
         const mat = new THREE.ShaderMaterial({
           uniforms: {
             dayMap: { value: day },
-            nightMap: { value: night },
+            nightMap: { value: night || day },
             bumpMap: { value: bump },
             specularMap: { value: spec },
-            sunDirection: { value: new THREE.Vector3(1.0, 0.3, 0.5).normalize() },
-            dayNightMode: { value: initialMode }
+            isNight: { value: isNightVal },
+            lightDirection: { value: new THREE.Vector3(0.5, 0.3, 1.0).normalize() }
           },
           vertexShader: EarthSurfaceShader.vertexShader,
           fragmentShader: EarthSurfaceShader.fragmentShader
         });
         surfaceShaderMatRef.current = mat;
         setCurrentGlobeMat(mat);
+        if (globeRef.current?.globeMaterial) {
+          globeRef.current.globeMaterial(mat);
+        }
       }
 
-      // Layer 2: Subtle Cloud Canopy (Radius 100.5, Section 3 & 6)
+      // Layer 2: Subtle Cloud Canopy (Radius 100.5)
       if (!cloudMeshRef.current && clouds) {
         const cloudGeo = new THREE.SphereGeometry(100.5, 64, 64);
         const cloudMat = new THREE.MeshStandardMaterial({
           map: clouds,
           transparent: true,
-          opacity: lightingMode === 'NIGHT' ? 0.0 : 0.14,
+          opacity: 0.15,
           blending: THREE.NormalBlending,
           depthWrite: false
         });
         cloudMeshRef.current = new THREE.Mesh(cloudGeo, cloudMat);
-        cloudMeshRef.current.visible = lightingMode !== 'NIGHT';
         concentricGroupRef.current.add(cloudMeshRef.current);
       }
 
-      // Layer 3: Atmospheric Fresnel Halo Sphere (Radius 102.5, Section 4.5 & 5.3)
+      // Layer 3: Atmospheric Fresnel Halo Sphere (Radius 102.5)
       if (!atmosphereMeshRef.current) {
         const atmoGeo = new THREE.SphereGeometry(102.5, 64, 64);
         const atmoMat = new THREE.ShaderMaterial({
           uniforms: {
-            glowColor: {
-              value: new THREE.Color(
-                lightingMode === 'NIGHT' ? 0x2563eb : lightingMode === 'DAY' ? 0x67e8f9 : 0x00d8ff
-              )
-            },
-            intensity: { value: lightingMode === 'NIGHT' ? 0.45 : 0.70 }
+            glowColor: { value: new THREE.Color(0x00d8ff) },
+            intensity: { value: 0.70 }
           },
           vertexShader: AtmosphereHaloShader.vertexShader,
           fragmentShader: AtmosphereHaloShader.fragmentShader,
@@ -338,28 +340,11 @@ const Scene = forwardRef(function Scene({
         concentricGroupRef.current.add(atmosphereMeshRef.current);
       }
 
-      // Layer 4: Glowing Atmospheric Rim Ring (Matches Screenshots 1, 2, 3)
-      if (!atmosphereRimRingRef.current) {
-        const rimGeo = new THREE.RingGeometry(100.2, 103.4, 128);
-        const rimColor = lightingMode === 'NIGHT' ? 0x2563eb : 0x00f0ff;
-        const rimMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(rimColor),
-          side: THREE.DoubleSide,
-          transparent: true,
-          opacity: 0.90,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false
-        });
-        atmosphereRimRingRef.current = new THREE.Mesh(rimGeo, rimMat);
-        concentricGroupRef.current.add(atmosphereRimRingRef.current);
-      }
-
-      // Layer 5: Deep Space Outer Rim (Section 9.4: R = 105.0, faint indigo back-side falloff opacity 0.02)
+      // Layer 4: Deep Space Outer Rim (R = 105.0)
       if (!deepSpaceRimRef.current) {
         const rimGeo = new THREE.SphereGeometry(105.0, 48, 48);
-        const rimColor = lightingMode === 'NIGHT' ? 0x1e1b4b : 0x1a8fcc;
         const rimMat = new THREE.MeshBasicMaterial({
-          color: rimColor,
+          color: 0x1a8fcc,
           side: THREE.BackSide,
           transparent: true,
           opacity: 0.02,
@@ -369,91 +354,24 @@ const Scene = forwardRef(function Scene({
         concentricGroupRef.current.add(deepSpaceRimRef.current);
       }
 
-      applyLightingMode(lightingMode);
       concentricGroupRef.current.visible = true;
     }
   };
 
-  // Apply Lighting Mode ('TERMINATOR', 'DAY', 'NIGHT') to Globe Materials & Atmosphere
-  const applyLightingMode = (mode) => {
-    if (!surfaceShaderMatRef.current) return;
-
-    const modeInt = mode === 'DAY' ? 1 : mode === 'NIGHT' ? 2 : 0;
-    if (surfaceShaderMatRef.current.uniforms.dayNightMode) {
-      surfaceShaderMatRef.current.uniforms.dayNightMode.value = modeInt;
-    }
-    surfaceShaderMatRef.current.needsUpdate = true;
-
-    if (globeRef.current?.globeMaterial) {
-      globeRef.current.globeMaterial(surfaceShaderMatRef.current);
-    }
-
-    if (mode === 'DAY') {
-      // 1. Full Day Mode (Screenshot 2: Full daylight Blue Marble + glowing cyan halo)
-      if (surfaceShaderMatRef.current?.uniforms?.sunDirection) {
-        surfaceShaderMatRef.current.uniforms.sunDirection.value.set(0.0, 0.2, 1.0).normalize();
-      }
-      if (atmosphereMeshRef.current?.material) {
-        atmosphereMeshRef.current.material.uniforms.glowColor.value.setHex(0x67e8f9);
-        atmosphereMeshRef.current.material.uniforms.intensity.value = 0.75;
-      }
-      if (atmosphereRimRingRef.current?.material) {
-        atmosphereRimRingRef.current.material.color.setHex(0x00f0ff);
-        atmosphereRimRingRef.current.material.opacity = 0.92;
-      }
-      if (cloudMeshRef.current) {
-        cloudMeshRef.current.visible = true;
-        cloudMeshRef.current.material.opacity = 0.15;
-      }
-      if (deepSpaceRimRef.current?.material) {
-        deepSpaceRimRef.current.material.color.setHex(0x1a8fcc);
-      }
-    } else if (mode === 'NIGHT') {
-      // 2. Full Night Mode (Screenshot 3: Full nocturnal city lights + deep royal blue atmosphere)
-      if (atmosphereMeshRef.current?.material) {
-        atmosphereMeshRef.current.material.uniforms.glowColor.value.setHex(0x2563eb);
-        atmosphereMeshRef.current.material.uniforms.intensity.value = 0.45;
-      }
-      if (atmosphereRimRingRef.current?.material) {
-        atmosphereRimRingRef.current.material.color.setHex(0x2563eb);
-        atmosphereRimRingRef.current.material.opacity = 0.92;
-      }
-      if (cloudMeshRef.current) {
-        // Hide clouds so nocturnal city lights glow with 100% clarity
-        cloudMeshRef.current.visible = false;
-        cloudMeshRef.current.material.opacity = 0.0;
-      }
-      if (deepSpaceRimRef.current?.material) {
-        deepSpaceRimRef.current.material.color.setHex(0x1e1b4b);
-      }
-    } else {
-      // 3. Dynamic Terminator Mode (Screenshot 1: Twilight blend + glowing cyan halo from viewpoint)
-      sunAngleRef.current = 0.85;
-      if (surfaceShaderMatRef.current?.uniforms?.sunDirection) {
-        surfaceShaderMatRef.current.uniforms.sunDirection.value.set(1.0, 0.3, 0.5).normalize();
-      }
-      if (atmosphereMeshRef.current?.material) {
-        atmosphereMeshRef.current.material.uniforms.glowColor.value.setHex(0x00d8ff);
-        atmosphereMeshRef.current.material.uniforms.intensity.value = 0.70;
-      }
-      if (atmosphereRimRingRef.current?.material) {
-        atmosphereRimRingRef.current.material.color.setHex(0x00f0ff);
-        atmosphereRimRingRef.current.material.opacity = 0.90;
-      }
-      if (cloudMeshRef.current) {
-        cloudMeshRef.current.visible = true;
-        cloudMeshRef.current.material.opacity = 0.12;
-      }
-      if (deepSpaceRimRef.current?.material) {
-        deepSpaceRimRef.current.material.color.setHex(0x0a1236);
-      }
-    }
-  };
-
-  // Re-apply whenever lightingMode prop changes
+  // Live Day / Night Lighting Mode Toggle (Updates shader uniform with zero terminator line)
   useEffect(() => {
-    applyLightingMode(lightingMode);
-  }, [lightingMode]);
+    const isNightVal = (lightingMode === 'NIGHT' || isNightMode) ? 1.0 : 0.0;
+    if (surfaceShaderMatRef.current) {
+      surfaceShaderMatRef.current.uniforms.isNight.value = isNightVal;
+    }
+    if (atmosphereMeshRef.current?.material?.uniforms?.glowColor) {
+      const isNight = isNightVal === 1.0;
+      atmosphereMeshRef.current.material.uniforms.glowColor.value = new THREE.Color(
+        isNight ? 0x0088ff : 0x00d8ff
+      );
+      atmosphereMeshRef.current.material.uniforms.intensity.value = isNight ? 0.85 : 0.70;
+    }
+  }, [lightingMode, isNightMode]);
 
   // Initial mount attach
   useEffect(() => {
@@ -485,11 +403,6 @@ const Scene = forwardRef(function Scene({
       lastTime = time;
 
       // Keep glowing atmospheric rim ring facing camera for authentic 360 halo
-      if (atmosphereRimRingRef.current && globeRef.current?.camera) {
-        atmosphereRimRingRef.current.quaternion.copy(globeRef.current.camera().quaternion);
-        atmosphereRimRingRef.current.position.set(0, 0, 0);
-      }
-
       // Subtle celestial starfield rotation (speed 0.5 matching Screenshot 5)
       if (starfieldRef.current) {
         starfieldRef.current.rotation.y += delta * 0.003;
@@ -502,21 +415,6 @@ const Scene = forwardRef(function Scene({
         if (cloudMeshRef.current) {
           cloudMeshRef.current.rotation.y += delta * 0.025 * timeScale;
         }
-
-        // Rotate Sun angle for dynamic day/night terminator traversal
-        if (lightingMode === 'TERMINATOR') {
-          sunAngleRef.current += delta * 0.025 * timeScale;
-          const sunX = Math.cos(sunAngleRef.current);
-          const sunZ = Math.sin(sunAngleRef.current);
-          const sunVec = new THREE.Vector3(sunX, 0.35, sunZ).normalize();
-
-          if (surfaceShaderMatRef.current) {
-            surfaceShaderMatRef.current.uniforms.sunDirection.value.copy(sunVec);
-          }
-          if (atmosphereMeshRef.current?.material) {
-            atmosphereMeshRef.current.material.uniforms.sunDirection.value.copy(sunVec);
-          }
-        }
       }
 
       // Propagate ALL satellites along their exact 3D Keplerian orbits at 60 FPS
@@ -526,25 +424,28 @@ const Scene = forwardRef(function Scene({
           const mesh = satMeshesMapRef.current.get(sat.id);
           const state = getSatelliteOrbitalState(sat, simTimeRef.current, globe);
           if (mesh) {
-            mesh.position.set(state.x, state.y, state.z);
-            mesh.up.set(state.x, state.y, state.z).normalize();
-            mesh.lookAt(state.nextX, state.nextY, state.nextZ);
+            orientSatelliteMesh(mesh, state);
           }
           sat._liveLat = state.lat;
           sat._liveLng = state.lng;
           sat._liveCoords = state;
         });
 
-        // Dynamic 60 FPS smooth camera tracking of active tracked satellite
+        // Dynamic camera tracking: View perspective is Me (screen/camera) -> CubeSat (in front) -> 3D Earth (behind)
         if (followTracking && selectedSatIds.length > 0) {
           const targetId = trackedSatId || selectedSatIds[0];
           const trackedSat = satellites.find(s => s.id === targetId);
-          if (trackedSat && trackedSat._liveLat !== undefined) {
-            globe.pointOfView({
-              lat: trackedSat._liveLat,
-              lng: trackedSat._liveLng,
-              altitude: 1.65
-            }, 0);
+          if (trackedSat && trackedSat._liveCoords) {
+            const coords = trackedSat._liveCoords;
+            // Lock camera directly on radial ray through Earth Center -> CubeSat -> Camera
+            if (time > trackingTransitionUntilRef.current) {
+              const currentPov = globe.pointOfView();
+              globe.pointOfView({
+                lat: coords.lat,
+                lng: coords.lng,
+                altitude: currentPov?.altitude || 1.65
+              }, 0);
+            }
           }
         }
 
@@ -560,23 +461,33 @@ const Scene = forwardRef(function Scene({
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [isPaused, timeScale, lightingMode, followTracking, selectedSatIds, trackedSatId, satellites]);
+  }, [isPaused, timeScale, followTracking, selectedSatIds, trackedSatId, satellites]);
 
-  // Smooth Satellite Camera Tracking (single satellite tracker)
+  // Initial smooth flight to satellite when tracking is activated or target changes
+  const lastTrackedTargetRef = useRef(null);
   useEffect(() => {
-    if (!followTracking || selectedSatIds.length === 0 || !globeRef.current) return;
+    if (!followTracking || selectedSatIds.length === 0 || !globeRef.current) {
+      lastTrackedTargetRef.current = null;
+      return;
+    }
     const targetId = trackedSatId || selectedSatIds[0];
     const trackedSat = satellites.find(s => s.id === targetId);
-    if (trackedSat && trackedSat.lat !== undefined && trackedSat.lng !== undefined) {
-      globeRef.current.pointOfView({
-        lat: trackedSat.lat,
-        lng: trackedSat.lng,
-        altitude: 1.65
-      }, 700);
+    if (trackedSat && lastTrackedTargetRef.current !== targetId) {
+      lastTrackedTargetRef.current = targetId;
+      trackingTransitionUntilRef.current = performance.now() + 650;
+      const initialLat = trackedSat._liveLat !== undefined ? trackedSat._liveLat : trackedSat.lat;
+      const initialLng = trackedSat._liveLng !== undefined ? trackedSat._liveLng : trackedSat.lng;
+      if (initialLat !== undefined && initialLng !== undefined) {
+        globeRef.current.pointOfView({
+          lat: initialLat,
+          lng: initialLng,
+          altitude: 1.65
+        }, 600);
+      }
     }
   }, [followTracking, selectedSatIds, trackedSatId, satellites]);
 
-  // Light Orbital Paths for ALL Satellites + Highlighted Path for the 1 Selected Satellite
+  // Light Orbital Paths for ALL Satellites + Highlighted Glowing Path for the Selected Satellite
   const orbitalRingsGroupRef = useRef(new THREE.Group());
 
   useEffect(() => {
@@ -605,11 +516,13 @@ const Scene = forwardRef(function Scene({
     };
   }, []);
 
-  // Update Orbital Trajectory Loops
+  // 3D Orbital Trajectory Paths Generation
+  // Generates closed 3D loops in Three.js coordinates (no cuts through Earth, exact match with satellite motion)
   useEffect(() => {
     const group = orbitalRingsGroupRef.current;
     if (!group) return;
 
+    // Clean up existing meshes
     while (group.children.length > 0) {
       const child = group.children[0];
       if (child.geometry) child.geometry.dispose();
@@ -620,126 +533,74 @@ const Scene = forwardRef(function Scene({
       group.remove(child);
     }
 
-    if (!showRings || satellites.length === 0) return;
+    if (!satellites || satellites.length === 0) return;
 
-    const globe = globeRef.current;
+    const activeSatId = selectedSatIds.length > 0 ? selectedSatIds[0] : trackedSatId;
 
-    satellites.forEach(sat => {
-      const isSelected = sat.isSelected;
-      const numSegments = isSelected ? 240 : 160;
-      const points = [];
-      const seed = getSatSeed(sat.id);
-      const nodeLngRad = ((seed * 73) % 360) * (Math.PI / 180);
-      const incRad = ((sat.inclination || (isCubeSatType(sat) ? 97.4 : 51.6)) * Math.PI) / 180;
-      const alt = sat.alt || 0.12;
+    satellites.forEach((sat) => {
+      const isSelected = sat.id === activeSatId;
 
-      for (let i = 0; i <= numSegments; i++) {
-        const u = (i / numSegments) * 2 * Math.PI;
-        const pt = getKeplerianOrbitalCoords(u, incRad, nodeLngRad, alt, globe);
-        points.push(new THREE.Vector3(pt.x, pt.y, pt.z));
-      }
+      // When showRings is toggled off, only render the highlighted selected satellite path
+      if (!showRings && !isSelected) return;
 
-      const curve = new THREE.CatmullRomCurve3(points, true);
+      const path3D = generateOrbitalPath3DPoints(sat, isSelected ? 240 : 120);
+      const points = path3D.map(p => new THREE.Vector3(p.x, p.y, p.z));
+      const geom = new THREE.BufferGeometry().setFromPoints(points);
 
       if (isSelected) {
-        // HIGHLIGHTED, GLOWING ORBITAL PATH for the 1 selected satellite
-        const tubeGeo = new THREE.TubeGeometry(curve, 240, 0.38, 8, true);
-        const colorHex = sat.slotColor || sat.orbitColor || '#00F0FF';
-        const tubeMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(colorHex),
+        // 1. HIGHLIGHTED SELECTED PATH: Ultra-vibrant core line
+        const lineColor = sat.slotColor || '#00F0FF';
+        const coreMat = new THREE.LineBasicMaterial({
+          color: new THREE.Color(lineColor),
+          linewidth: 3,
           transparent: true,
           opacity: 0.95,
-          depthTest: true
-        });
-        const ringMesh = new THREE.Mesh(tubeGeo, tubeMat);
-        group.add(ringMesh);
-
-        // Outer glow bloom tube for selected orbit
-        const glowGeo = new THREE.TubeGeometry(curve, 180, 0.75, 6, true);
-        const glowMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(colorHex),
-          transparent: true,
-          opacity: 0.30,
           blending: THREE.AdditiveBlending,
-          depthTest: true
+          depthWrite: false
         });
-        group.add(new THREE.Mesh(glowGeo, glowMat));
+        const coreLoop = new THREE.LineLoop(geom, coreMat);
+        coreLoop.userData = { satId: sat.id };
+        group.add(coreLoop);
+
+        // 2. Volumetric Glowing Neon Aura Tube around highlighted path
+        try {
+          const curve = new THREE.CatmullRomCurve3(points, true);
+          const tubeGeom = new THREE.TubeGeometry(curve, 180, 0.45, 8, true);
+          const tubeMat = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(lineColor),
+            transparent: true,
+            opacity: 0.35,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+          });
+          const tubeMesh = new THREE.Mesh(tubeGeom, tubeMat);
+          tubeMesh.userData = { satId: sat.id };
+          group.add(tubeMesh);
+        } catch (e) {
+          console.warn('Tube geom generation fallback', e);
+        }
       } else {
-        // LIGHT, SUBTLE ORBITAL PATH for all other satellites in the background
-        const tubeGeo = new THREE.TubeGeometry(curve, 160, 0.10, 6, true);
-        const colorHex = sat.orbitColor || '#00F0FF';
-        const tubeMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(colorHex),
+        // 3. NON-SELECTED PATHS: Sleek, subtle orbital trace with orbit type color
+        const orbitColor = sat.orbitColor || '#00F0FF';
+        const traceMat = new THREE.LineBasicMaterial({
+          color: new THREE.Color(orbitColor),
           transparent: true,
-          opacity: 0.20,
-          depthTest: true
+          opacity: 0.22,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
         });
-        const ringMesh = new THREE.Mesh(tubeGeo, tubeMat);
-        group.add(ringMesh);
+        const traceLoop = new THREE.LineLoop(geom, traceMat);
+        traceLoop.userData = { satId: sat.id };
+        group.add(traceLoop);
       }
     });
-  }, [satellites, showRings]);
+  }, [satellites, selectedSatIds, trackedSatId, showRings]);
 
-  // Communication Laser Arcs (Follow moving satellites in real time)
-  const arcs = useMemo(() => {
-    if (!showUplinks || satellites.length === 0 || groundStations.length === 0) return [];
-    
-    const calculatedArcs = [];
-    const activeTargets = satellites.filter(s => s.isSelected);
-
-    activeTargets.forEach(sat => {
-      const curLat = sat._liveLat !== undefined ? sat._liveLat : sat.lat;
-      const curLng = sat._liveLng !== undefined ? sat._liveLng : sat.lng;
-
-      const inRangeStations = groundStations.filter(gs => {
-        const isDesignated = gs.connectedSatellites && gs.connectedSatellites.some(s => {
-          const id = typeof s === 'object' ? (s.satelliteId || s._id) : s;
-          return id === sat.id;
-        });
-
-        const distDeg = getAngularDistanceDeg(curLat, curLng, gs.latitude, gs.longitude);
-        return isDesignated && distDeg <= 55;
-      });
-
-      inRangeStations.forEach(gs => {
-        const color = sat.slotColor || '#00F0FF';
-        calculatedArcs.push({
-          satId: sat.id,
-          startLat: curLat,
-          startLng: curLng,
-          endLat: gs.latitude,
-          endLng: gs.longitude,
-          color: [color, `${color}60`],
-          satColor: color,
-          stationName: gs.name,
-          stationId: gs.stationId
-        });
-      });
-    });
-
-    return calculatedArcs;
-  }, [showUplinks, satellites, groundStations, arcTick]);
-
-  // Radar Broadcast & Footprint Rings (Follow moving satellites in real time)
+  // Ground Station Radar Broadcast Rings (Station pulses only - no moving lines on Earth)
   const allRings = useMemo(() => {
     if (!showRings) return [];
     const rings = [];
-
-    const selectedSats = satellites.filter(s => s.isSelected);
-    selectedSats.forEach(sat => {
-      const curLat = sat._liveLat !== undefined ? sat._liveLat : sat.lat;
-      const curLng = sat._liveLng !== undefined ? sat._liveLng : sat.lng;
-
-      rings.push({
-        latitude: curLat,
-        longitude: curLng,
-        isSatFootprint: true,
-        ringColorHex: sat.slotColor || '#00F0FF',
-        maxRadius: 4.5,
-        propagationSpeed: 2.0,
-        repeatPeriod: 1400
-      });
-    });
 
     if (selectedStationId && groundStations && groundStations.length > 0) {
       const gs = groundStations.find(s => s._id === selectedStationId || s.stationId === selectedStationId);
@@ -755,11 +616,43 @@ const Scene = forwardRef(function Scene({
     }
 
     return rings;
-  }, [satellites, groundStations, selectedStationId, showRings, arcTick]);
+  }, [groundStations, selectedStationId, showRings]);
+
+  // Handle click on canvas to select orbital path or satellite
+  const handleCanvasClick = (event) => {
+    if (!containerRef.current || !globeRef.current || !onSelectSatellite) return;
+    const scene = globeRef.current.scene();
+    const camera = globeRef.current.camera();
+    if (!scene || !camera) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.params.Line = { threshold: 2.5 };
+    raycaster.setFromCamera(mouse, camera);
+
+    if (orbitalRingsGroupRef.current) {
+      const intersects = raycaster.intersectObjects(orbitalRingsGroupRef.current.children, true);
+      if (intersects.length > 0) {
+        for (let hit of intersects) {
+          const satId = hit.object?.userData?.satId;
+          if (satId) {
+            onSelectSatellite(satId);
+            return;
+          }
+        }
+      }
+    }
+  };
 
   return (
     <div
       ref={containerRef}
+      onClick={handleCanvasClick}
       className="w-full h-full bg-[#050810] relative rounded-lg overflow-hidden border border-gray-800 shadow-[0_0_40px_rgba(0,240,255,0.05)] cursor-move"
     >
       <Globe
@@ -776,9 +669,7 @@ const Scene = forwardRef(function Scene({
           satMeshesMapRef.current.set(d.id, mesh);
           if (globeRef.current) {
             const state = getSatelliteOrbitalState(d, simTimeRef.current, globeRef.current);
-            mesh.position.set(state.x, state.y, state.z);
-            mesh.up.set(state.x, state.y, state.z).normalize();
-            mesh.lookAt(state.nextX, state.nextY, state.nextZ);
+            orientSatelliteMesh(mesh, state);
           }
           return mesh;
         }}
@@ -786,9 +677,7 @@ const Scene = forwardRef(function Scene({
           satMeshesMapRef.current.set(d.id, obj);
           if (globeRef.current) {
             const state = getSatelliteOrbitalState(d, simTimeRef.current, globeRef.current);
-            obj.position.set(state.x, state.y, state.z);
-            obj.up.set(state.x, state.y, state.z).normalize();
-            obj.lookAt(state.nextX, state.nextY, state.nextZ);
+            orientSatelliteMesh(obj, state);
           }
         }}
         onCustomLayerClick={(d) => {
@@ -833,35 +722,18 @@ const Scene = forwardRef(function Scene({
           </div>
         `}
 
-        // Radar Broadcast & Satellite Footprint Rings
+        // Ground Station Broadcast Rings
         ringsData={allRings}
         ringLat="latitude"
         ringLng="longitude"
         ringColor={d => (t) => {
-          if (d.isSatFootprint) {
-            const hex = d.ringColorHex || '#00F0FF';
-            return `rgba(0, 240, 255, ${Math.max(0, (1 - t) * 0.75)})`;
-          }
           return d.isSelected 
             ? `rgba(0, 240, 255, ${Math.max(0, (1 - t) * 0.95)})`
             : `rgba(0, 255, 102, ${Math.max(0, (1 - t) * 0.45)})`;
         }}
-        ringMaxRadius={d => d.maxRadius || 3.5}
-        ringPropagationSpeed={d => d.propagationSpeed || 1.8}
-        ringRepeatPeriod={d => d.repeatPeriod || 1600}
-
-        // Communication Laser Arcs
-        arcsData={arcs}
-        arcStartLat="startLat"
-        arcStartLng="startLng"
-        arcEndLat="endLat"
-        arcEndLng="endLng"
-        arcColor="color"
-        arcAltitude={0.025}
-        arcStroke={1.0}
-        arcDashLength={0.3}
-        arcDashGap={1.0}
-        arcDashAnimateTime={1500}
+        ringMaxRadius={d => d.maxRadius || 5.0}
+        ringPropagationSpeed={d => d.propagationSpeed || 2.2}
+        ringRepeatPeriod={d => d.repeatPeriod || 1200}
       />
     </div>
   );

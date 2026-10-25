@@ -13,92 +13,144 @@ let commandSequenceCounter = 102;
 // @route   GET /api/telemetry/cubesat/state
 // @access  Private
 const getCubeSatState = asyncHandler(async (req, res) => {
-  const { id } = req.query;
+  let { id } = req.query;
 
-  // If specific ID requested, return that one
+  // Find the requested satellite or fallback to the first active satellite in the database
+  let dbSat = null;
   if (id) {
-    if (!cubeSatStates[id]) {
-      // Look up satellite in DB to populate realistic metadata
-      let dbSat = null;
-      try {
-        dbSat = await Satellite.findOne({
-          $or: [
-            { satelliteId: id },
-            { name: id },
-            ...(id.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: id }] : [])
-          ]
-        });
-      } catch (e) {
-        // Ignore DB query errors and use safe defaults
-      }
+    try {
+      dbSat = await Satellite.findOne({
+        $or: [
+          { satelliteId: id },
+          { name: id },
+          ...(id.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: id }] : [])
+        ]
+      });
+    } catch (e) {
+      // Ignore DB query errors
+    }
+  }
 
-      const satName = dbSat?.name || id;
-      const rawType = (dbSat?.type || '').toUpperCase();
-      let formFactor = '3U';
+  // If specific ID was not found or not provided, pick the first existing satellite from DB
+  if (!dbSat) {
+    try {
+      dbSat = await Satellite.findOne({ status: { $ne: 'DECOMMISSIONED' } }) || await Satellite.findOne();
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  // If there are literally no satellites in the database at all:
+  if (!dbSat) {
+    return res.status(200).json(new ApiResponse(200, null, 'No active satellites found in database'));
+  }
+
+  const satId = dbSat.satelliteId || dbSat._id.toString();
+
+  // Initialize or return in-memory simulation state for this real satellite
+  if (!cubeSatStates[satId]) {
+    const rawType = (dbSat.type || '').toUpperCase();
+    let formFactor = dbSat.formFactor || '3U';
+    if (!dbSat.formFactor) {
       if (rawType.includes('16U') || rawType === '16U') formFactor = '16U';
       else if (rawType.includes('12U') || rawType === '12U') formFactor = '12U';
       else if (rawType.includes('6U') || rawType === '6U') formFactor = '6U';
       else if (rawType.includes('1U') || rawType === '1U') formFactor = '1U';
       else if (rawType.includes('2U') || rawType === '2U') formFactor = '2U';
-
-      const orbitType = dbSat?.orbitType || 'LEO';
-
-      cubeSatStates[id] = {
-        satelliteId: id,
-        name: satName,
-        formFactor,
-        orbitType,
-        status: dbSat?.status || 'NOMINAL',
-        speed: dbSat?.orbitSpeed || 7.58,
-        altitude: dbSat?.orbitRadius ? Math.max(300, dbSat.orbitRadius - 6371) : 510.0,
-        distanceFromEarth: dbSat?.orbitRadius || 6881.0,
-        temperature: { bus: 22.0, solar: 42.0, battery: 20.0, radio: 30.0 },
-        load: { cpu: 20, memory: 30, busPower: 15.0 },
-        battery: 88.0,
-        propellant: 92.0,
-        solarPanelsDeployed: true,
-        heaterActive: false,
-        attitude: { roll: 0.1, pitch: -0.2, yaw: 1.5, spinRate: 0.04, mode: 'NADIR' },
-        groundStation: 'Toulouse Center (GS-003)',
-        signalStrength: -79,
-        snr: 15.0,
-        packetsDownlinked: 2400,
-        commandHistory: []
-      };
     }
-    return res.status(200).json(new ApiResponse(200, cubeSatStates[id], 'CubeSat simulation state retrieved'));
+
+    const orbitType = dbSat.orbitType || 'LEO';
+
+    cubeSatStates[satId] = {
+      satelliteId: satId,
+      name: dbSat.name || satId,
+      formFactor,
+      orbitType,
+      status: dbSat.status || 'NOMINAL',
+      speed: dbSat.orbitSpeed || 7.58,
+      altitude: dbSat.orbitRadius ? Math.max(300, Math.round(dbSat.orbitRadius - 6371)) : 510.0,
+      distanceFromEarth: dbSat.orbitRadius || 6881.0,
+      temperature: { bus: 22.0, solar: 42.0, battery: 20.0, radio: 30.0 },
+      load: { cpu: 20, memory: 30, busPower: 15.0 },
+      battery: 88.0,
+      propellant: 92.0,
+      solarPanelsDeployed: true,
+      heaterActive: false,
+      attitude: { roll: 0.1, pitch: -0.2, yaw: 1.5, spinRate: 0.04, mode: 'NADIR' },
+      groundStation: 'Toulouse Center (GS-003)',
+      signalStrength: -79,
+      snr: 15.0,
+      packetsDownlinked: 2400,
+      commandHistory: []
+    };
   }
 
-  // Otherwise, return all CubeSat states
-  res.status(200).json(new ApiResponse(200, cubeSatStates, 'All CubeSat simulation states retrieved'));
+  return res.status(200).json(new ApiResponse(200, cubeSatStates[satId], 'CubeSat simulation state retrieved'));
 });
 
 // @desc    Execute CubeSat telecommand
 // @route   POST /api/telemetry/cubesat/command
 // @access  Private
 const executeCubeSatCommand = asyncHandler(async (req, res) => {
-  const { satelliteId = 'CUBESAT-ION', command, params = {} } = req.body;
+  let { satelliteId, command, params = {} } = req.body;
 
   if (!command) {
     return res.status(400).json(new ApiResponse(400, null, 'Command is required'));
   }
 
-  // Ensure state exists or create fallback
-  if (!cubeSatStates[satelliteId]) {
-    cubeSatStates[satelliteId] = {
-      satelliteId,
-      name: satelliteId,
-      formFactor: '3U',
-      orbitType: 'LEO',
-      status: 'NOMINAL',
-      speed: 7.58,
-      altitude: 505.0,
-      distanceFromEarth: 6876.0,
+  // Ensure satellite exists in database
+  let dbSat = null;
+  if (satelliteId) {
+    try {
+      dbSat = await Satellite.findOne({
+        $or: [
+          { satelliteId },
+          { name: satelliteId },
+          ...(satelliteId.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: satelliteId }] : [])
+        ]
+      });
+    } catch (e) {}
+  }
+
+  if (!dbSat) {
+    try {
+      dbSat = await Satellite.findOne({ status: { $ne: 'DECOMMISSIONED' } }) || await Satellite.findOne();
+    } catch (e) {}
+  }
+
+  if (!dbSat) {
+    return res.status(404).json(new ApiResponse(404, null, 'No active satellites found in database'));
+  }
+
+  const activeSatId = dbSat.satelliteId || dbSat._id.toString();
+
+  // Ensure state exists for this real satellite
+  if (!cubeSatStates[activeSatId]) {
+    const rawType = (dbSat.type || '').toUpperCase();
+    let formFactor = dbSat.formFactor || '3U';
+    if (!dbSat.formFactor) {
+      if (rawType.includes('16U') || rawType === '16U') formFactor = '16U';
+      else if (rawType.includes('12U') || rawType === '12U') formFactor = '12U';
+      else if (rawType.includes('6U') || rawType === '6U') formFactor = '6U';
+      else if (rawType.includes('1U') || rawType === '1U') formFactor = '1U';
+      else if (rawType.includes('2U') || rawType === '2U') formFactor = '2U';
+    }
+
+    cubeSatStates[activeSatId] = {
+      satelliteId: activeSatId,
+      name: dbSat.name || activeSatId,
+      formFactor,
+      orbitType: dbSat.orbitType || 'LEO',
+      status: dbSat.status || 'NOMINAL',
+      speed: dbSat.orbitSpeed || 7.58,
+      altitude: dbSat.orbitRadius ? Math.max(300, Math.round(dbSat.orbitRadius - 6371)) : 505.0,
+      distanceFromEarth: dbSat.orbitRadius || 6876.0,
       temperature: { bus: 22.0, solar: 42.0, battery: 20.0, radio: 30.0 },
       load: { cpu: 20, memory: 30, busPower: 15.0 },
       battery: 85.0,
       propellant: 90.0,
       solarPanelsDeployed: true,
+      heaterActive: false,
       attitude: { roll: 0, pitch: 0, yaw: 0, spinRate: 0.05, mode: 'NADIR' },
       groundStation: 'Ground Station Alpha (GS-001)',
       signalStrength: -80,
@@ -108,7 +160,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
     };
   }
 
-  const sat = cubeSatStates[satelliteId];
+  const sat = cubeSatStates[activeSatId];
   const cmdUpper = command.toUpperCase();
   const seq = commandSequenceCounter++;
   let responseText = '';

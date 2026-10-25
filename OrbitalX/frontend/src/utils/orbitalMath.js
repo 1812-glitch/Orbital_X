@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 /**
  * Shared orbital math utilities and constants for 3D visualization,
  * satellite tracking, and ground station communication links.
@@ -97,35 +99,108 @@ export const calculateVisualAltitude = (altitudeKm, orbitType = 'LEO') => {
 };
 
 /**
- * Stable, fixed 3D orbital trajectory path calculation that NEVER wiggles or jumps.
- * @param {object} sat Satellite object with inclination and alt
- * @param {number} numPoints Resolution of the path
- * @returns {Array<[number, number, number]>} Array of [lat, lng, alt] points
+ * Converts 3D Cartesian coordinates to spherical latitude, longitude, and altitude
+ * using exact inverse of ThreeGlobe's polar2Cartesian method.
+ * Guarantees 100% radial alignment between ThreeGlobe camera ray and 3D satellite mesh.
  */
-export const generateFixedOrbitalPath = (sat, numPoints = 120) => {
-  const points = [];
-  const inclinationDeg = sat.inclination || 51.6;
+export const cartesianToGeo = (x, y, z, GLOBE_RADIUS = 100) => {
+  const r = Math.sqrt(x * x + y * y + z * z);
+  const phi = Math.acos(Math.max(-1, Math.min(1, y / r)));
+  const theta = Math.atan2(z, x);
+  let lat = 90 - (phi * 180) / Math.PI;
+  let lng = 90 - (theta * 180) / Math.PI - (theta < -Math.PI / 2 ? 360 : 0);
+  while (lng > 180) lng -= 360;
+  while (lng < -180) lng += 360;
+  const altitude = r / GLOBE_RADIUS - 1;
+  return { lat, lng, altitude, r };
+};
+
+/**
+ * Exact Keplerian 3D Position & Coordinates for a circular orbit around Globe (R = 100 * (1 + alt)).
+ * Matches 100% with the 3D orbital trajectory path geometry and ThreeGlobe spherical coordinates.
+ */
+export const getOrbitalVector = (u, incRad, nodeLngRad, R) => {
+  const cosNode = Math.cos(nodeLngRad);
+  const sinNode = Math.sin(nodeLngRad);
+  const cosInc = Math.cos(incRad);
+  const sinInc = Math.sin(incRad);
+
+  const cosU = Math.cos(u);
+  const sinU = Math.sin(u);
+
+  // Exact 3D coordinates in Three.js space
+  const x = R * (cosNode * cosU - cosInc * sinNode * sinU);
+  const y = R * (sinInc * sinU);
+  const z = R * (sinNode * cosU + cosInc * cosNode * sinU);
+
+  // Exact matching Geo coords (lat, lng) matching ThreeGlobe polar2Cartesian
+  const { lat, lng } = cartesianToGeo(x, y, z, 100);
+
+  return { x, y, z, lat, lng };
+};
+
+/**
+ * Orients a satellite mesh using a stable orthonormal orbital reference frame:
+ * - X: Orbit plane normal vector (lateral solar wings)
+ * - Y: True zenith vector (radial outward from Earth center toward viewer/space)
+ * - Z: Tangent velocity vector (prograde flight direction)
+ * Eliminates gimbal lock, polar flips, and wild spinning completely.
+ */
+export const orientSatelliteMesh = (mesh, state) => {
+  if (!mesh || !state) return;
+  mesh.position.set(state.x, state.y, state.z);
+
+  const pos = new THREE.Vector3(state.x, state.y, state.z);
+  const nextPos = new THREE.Vector3(state.nextX, state.nextY, state.nextZ);
+  let tangent = new THREE.Vector3().subVectors(nextPos, pos);
+  if (tangent.lengthSq() < 1e-8) {
+    tangent = new THREE.Vector3(0, 0, 1);
+  } else {
+    tangent.normalize();
+  }
+
+  const radialUp = pos.clone().normalize();
+  let orbitNormal = new THREE.Vector3().crossVectors(radialUp, tangent);
+  if (orbitNormal.lengthSq() < 1e-8) {
+    orbitNormal = new THREE.Vector3(1, 0, 0);
+  } else {
+    orbitNormal.normalize();
+  }
+
+  const trueUp = new THREE.Vector3().crossVectors(tangent, orbitNormal).normalize();
+  const rotMatrix = new THREE.Matrix4().makeBasis(orbitNormal, trueUp, tangent);
+  mesh.quaternion.setFromRotationMatrix(rotMatrix);
+};
+
+export const getSatOrbitalParams = (sat) => {
+  const satId = sat.id || sat.satelliteId || 'SAT';
+  const seed = getSatSeed(satId);
+  const nodeLngRad = ((seed * 73) % 360) * (Math.PI / 180);
+  const inclinationDeg = sat.inclination || (isCubeSatType(sat) ? 97.4 : 51.6);
   const incRad = (inclinationDeg * Math.PI) / 180;
+  const alt = sat.alt !== undefined ? sat.alt : 0.08;
+  const R = 100 * (1 + alt);
+  return { satId, seed, nodeLngRad, inclinationDeg, incRad, alt, R };
+};
 
-  // Deterministic fixed ascending node longitude per satellite ID
-  const seed = getSatSeed(sat.id);
-  const nodeLng = ((seed * 73) % 360) * (Math.PI / 180);
-  const alt = sat.alt;
-
+export const generateFixedOrbitalPath = (sat, numPoints = 180) => {
+  const { nodeLngRad, incRad, alt, R } = getSatOrbitalParams(sat);
+  const points = [];
   for (let i = 0; i <= numPoints; i++) {
     const u = (i / numPoints) * 2 * Math.PI;
-    // Fixed spherical coordinates in stable Keplerian orbital plane
-    const x =
-      Math.cos(nodeLng) * Math.cos(u) -
-      Math.sin(nodeLng) * Math.sin(u) * Math.cos(incRad);
-    const y = Math.sin(u) * Math.sin(incRad);
-    const z =
-      Math.sin(nodeLng) * Math.cos(u) +
-      Math.cos(nodeLng) * Math.sin(u) * Math.cos(incRad);
+    const v = getOrbitalVector(u, incRad, nodeLngRad, R);
+    points.push([v.lat, v.lng, alt]);
+  }
+  return points;
+};
 
-    const latDeg = Math.asin(Math.max(-1, Math.min(1, y))) * (180 / Math.PI);
-    const lngDeg = Math.atan2(z, x) * (180 / Math.PI);
-    points.push([latDeg, lngDeg, alt]);
+export const generateOrbitalPath3DPoints = (sat, numPoints = 180) => {
+  const { nodeLngRad, incRad, alt, R } = getSatOrbitalParams(sat);
+  const points = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const u = (i / numPoints) * 2 * Math.PI;
+    const v = getOrbitalVector(u, incRad, nodeLngRad, R);
+    points.push({ ...v, alt });
   }
   return points;
 };
@@ -167,25 +242,13 @@ export const getConnectedGroundStations = (satItem, groundStations = []) => {
 /**
  * Calculates exact latitude, longitude, and 3D coordinates for a Keplerian orbit
  * at a given phase angle `u` in [0, 2*PI].
- * Uses the exact same coordinate transformation used to build the 3D orbital tube rings.
  */
 export const getKeplerianOrbitalCoords = (u, incRad, nodeLngRad, alt, globe = null) => {
-  const sinLat = Math.sin(incRad) * Math.sin(u);
-  const lat = Math.asin(Math.max(-1, Math.min(1, sinLat))) * (180 / Math.PI);
-  const lngInPlane = Math.atan2(Math.cos(incRad) * Math.sin(u), Math.cos(u));
-  let lng = (nodeLngRad + lngInPlane) * (180 / Math.PI);
-  lng = ((((lng + 180) % 360) + 360) % 360) - 180;
-
-  if (globe && typeof globe.getCoords === 'function') {
-    const coords = globe.getCoords(lat, lng, alt);
-    return { lat, lng, alt, x: coords.x, y: coords.y, z: coords.z };
-  }
-
-  const r = 100 * (1 + alt);
-  const x = r * (Math.sin(nodeLngRad) * Math.cos(u) + Math.cos(nodeLngRad) * Math.cos(incRad) * Math.sin(u));
-  const y = r * (Math.sin(incRad) * Math.sin(u));
-  const z = r * (Math.cos(nodeLngRad) * Math.cos(u) - Math.sin(nodeLngRad) * Math.cos(incRad) * Math.sin(u));
-  return { lat, lng, alt, x, y, z };
+  const R = 100 * (1 + alt);
+  return {
+    ...getOrbitalVector(u, incRad, nodeLngRad, R),
+    alt
+  };
 };
 
 /**
@@ -194,11 +257,7 @@ export const getKeplerianOrbitalCoords = (u, incRad, nodeLngRad, alt, globe = nu
  * Guaranteed to sit exactly on the 3D orbital path generated by `generateFixedOrbitalPath`.
  */
 export const getSatelliteOrbitalState = (sat, simTime, globe = null) => {
-  const satId = sat.id || sat.satelliteId || 'SAT';
-  const seed = getSatSeed(satId);
-  const nodeLngRad = ((seed * 73) % 360) * (Math.PI / 180);
-  const incRad = ((sat.inclination || (isCubeSatType(sat) ? 97.4 : 51.6)) * Math.PI) / 180;
-  const alt = sat.alt !== undefined ? sat.alt : 0.12;
+  const { satId, seed, nodeLngRad, incRad, alt, R } = getSatOrbitalParams(sat);
 
   // Keplerian period: GEO = 86400s, MEO = 43200s, LEO = 5400s (90 mins)
   const orbitType = sat.type || sat.orbitType || 'LEO';
@@ -207,14 +266,15 @@ export const getSatelliteOrbitalState = (sat, simTime, globe = null) => {
   const phaseOffset = (seed * 1.5) % (2 * Math.PI);
 
   const u = (phaseOffset + simTime * meanMotion) % (2 * Math.PI);
-  const current = getKeplerianOrbitalCoords(u, incRad, nodeLngRad, alt, globe);
+  const current = getOrbitalVector(u, incRad, nodeLngRad, R);
 
   // Tangent sample forward along trajectory for heading orientation
-  const du = 0.015;
-  const next = getKeplerianOrbitalCoords(u + du, incRad, nodeLngRad, alt, globe);
+  const du = 0.01;
+  const next = getOrbitalVector(u + du, incRad, nodeLngRad, R);
 
   return {
     ...current,
+    alt,
     nextX: next.x,
     nextY: next.y,
     nextZ: next.z,

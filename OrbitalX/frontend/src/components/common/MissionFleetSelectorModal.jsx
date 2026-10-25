@@ -55,9 +55,7 @@ export default function MissionFleetSelectorModal({
           const apiMissions = missionsRes.data || [];
           const apiSats = satsRes.data || [];
 
-          // Merge with fallback seeds
-          const mergedMissions = apiMissions.length > 0 ? apiMissions : INITIAL_MISSIONS;
-          setMissions(mergedMissions);
+          setMissions(apiMissions);
           setSatellites(apiSats);
         }
       } catch (err) {
@@ -85,11 +83,14 @@ export default function MissionFleetSelectorModal({
         if (!id || seenIds.has(id)) return;
         seenIds.add(id);
 
-        list.push({
-          ...synthesizeCubeSatSim(satObj, m),
-          missionId: m.missionId || 'MSN-APOLLO',
-          missionName: m.name || 'Apollo Operations'
-        });
+        const synthesized = synthesizeCubeSatSim(satObj, m);
+        if (synthesized) {
+          list.push({
+            ...synthesized,
+            missionId: m.missionId || '',
+            missionName: m.name || 'Orbital Mission'
+          });
+        }
       });
     });
 
@@ -99,10 +100,13 @@ export default function MissionFleetSelectorModal({
       if (!id || seenIds.has(id)) return;
       seenIds.add(id);
 
-      list.push(synthesizeCubeSatSim(sat, {
-        missionId: 'MSN-GLOBAL',
-        name: 'Global Orbital Constellation'
-      }));
+      const synthesized = synthesizeCubeSatSim(sat, {
+        missionId: 'FLEET',
+        name: 'Fleet Spacecraft'
+      });
+      if (synthesized) {
+        list.push(synthesized);
+      }
     });
 
     return list;

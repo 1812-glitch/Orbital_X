@@ -1,45 +1,16 @@
 import React from 'react';
-import { Sun, Moon, RotateCw, Crosshair } from 'lucide-react';
+import { RotateCw, Crosshair, Sun, Moon } from 'lucide-react';
 
 function GlobeControlsHud({
-  nightMode,
-  setNightMode,
   warpSpeed,
   setWarpSpeed,
   followSat,
-  onToggleFollow
+  onToggleFollow,
+  lightingMode = 'DAY',
+  onToggleLightingMode
 }) {
   return (
     <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 z-10 pointer-events-auto">
-      {/* Day / Night Toggle */}
-      <div className="flex items-center bg-[#0A0F1F]/90 border border-gray-800 rounded-lg p-0.5 backdrop-blur-md shadow-lg">
-        <button
-          id="earth-toggle-day-btn"
-          onClick={() => setNightMode(false)}
-          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded font-mono text-xs transition-all ${
-            !nightMode
-              ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.4)]'
-              : 'text-gray-400 hover:text-white'
-          }`}
-          title="Switch to Daytime Blue Marble Earth"
-        >
-          <Sun size={13} className={!nightMode ? 'text-black' : 'text-[#FFB000]'} />
-          <span>DAY</span>
-        </button>
-        <button
-          id="earth-toggle-night-btn"
-          onClick={() => setNightMode(true)}
-          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded font-mono text-xs transition-all ${
-            nightMode
-              ? 'bg-[#00F0FF] text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.4)]'
-              : 'text-gray-400 hover:text-white'
-          }`}
-          title="Switch to Night Lights Earth"
-        >
-          <Moon size={13} className={nightMode ? 'text-black' : 'text-[#00F0FF]'} />
-          <span>NIGHT</span>
-        </button>
-      </div>
 
       {/* Orbit Speed Warp Toggle */}
       <div className="flex items-center bg-[#0A0F1F]/90 border border-gray-800 rounded-lg p-0.5 backdrop-blur-md text-xs font-mono">
@@ -61,6 +32,22 @@ function GlobeControlsHud({
         ))}
       </div>
 
+      {/* Day / Night Mode Toggle */}
+      {onToggleLightingMode && (
+        <button
+          onClick={onToggleLightingMode}
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-mono text-xs backdrop-blur-md border transition-all ${
+            lightingMode === 'NIGHT'
+              ? 'bg-indigo-950/70 border-indigo-500/60 text-indigo-300 font-bold shadow-[0_0_10px_rgba(99,102,241,0.25)]'
+              : 'bg-amber-500/15 border-amber-500/40 text-amber-300 font-bold hover:bg-amber-500/25'
+          }`}
+          title={lightingMode === 'NIGHT' ? 'Current: NIGHT (Click to switch to DAY mode)' : 'Current: DAY (Click to switch to NIGHT mode)'}
+        >
+          {lightingMode === 'NIGHT' ? <Moon size={12} className="text-indigo-400" /> : <Sun size={12} className="text-amber-400" />}
+          <span>{lightingMode === 'NIGHT' ? 'NIGHT' : 'DAY'}</span>
+        </button>
+      )}
+
       {/* Camera Tracking Toggle */}
       <button
         onClick={onToggleFollow}
@@ -69,7 +56,7 @@ function GlobeControlsHud({
             ? 'bg-[#00FF66]/20 border-[#00FF66] text-[#00FF66] font-bold shadow-[0_0_12px_rgba(0,255,102,0.3)]'
             : 'bg-[#0A0F1F]/90 border-gray-800 text-gray-400 hover:text-white'
         }`}
-        title="Toggle camera following CubeSat in orbit"
+        title="Toggle camera following CubeSat in orbit (Me -> CubeSat -> 3D Earth)"
       >
         <Crosshair size={13} className={followSat ? 'animate-spin' : ''} />
         <span>{followSat ? 'TRACKING CUBESAT' : 'FREE CAMERA'}</span>

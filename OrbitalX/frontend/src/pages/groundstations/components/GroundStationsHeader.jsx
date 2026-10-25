@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   RadioTower, 
-  Sun, 
-  Moon, 
   Play, 
   Pause, 
   Radio, 
   Layers, 
-  RefreshCw 
+  RefreshCw,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 const UtcClock = React.memo(function UtcClock() {
@@ -23,8 +23,6 @@ const UtcClock = React.memo(function UtcClock() {
 
 export default function GroundStationsHeader({
   activeStation,
-  nightMode,
-  setNightMode,
   autoRotate,
   setAutoRotate,
   showDiagnostics,
@@ -32,7 +30,9 @@ export default function GroundStationsHeader({
   showNetworkTable,
   setShowNetworkTable,
   stationsCount,
-  fetchData
+  fetchData,
+  lightingMode = 'DAY',
+  onToggleLightingMode
 }) {
   return (
     <div className="w-full flex flex-col xl:flex-row xl:items-center justify-between border-b border-gray-800 pb-3 gap-3">
@@ -62,19 +62,6 @@ export default function GroundStationsHeader({
 
       {/* Right Controls */}
       <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-        <button
-          id="toggle-day-night-btn"
-          onClick={() => setNightMode(!nightMode)}
-          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border transition-all font-bold ${
-            nightMode 
-              ? 'bg-[#121C36] text-[#00F0FF] border-[#00F0FF]/50 shadow-[0_0_10px_rgba(0,240,255,0.2)]' 
-              : 'bg-[#FFB000]/15 text-[#FFB000] border-[#FFB000]/50 shadow-[0_0_10px_rgba(255,176,0,0.2)]'
-          }`}
-          title="Toggle Earth Day / Night Illumination"
-        >
-          {nightMode ? <Moon size={13} className="text-[#00F0FF]" /> : <Sun size={13} className="text-[#FFB000]" />}
-          <span>{nightMode ? 'NIGHT LIGHTS' : 'DAY MARBLE'}</span>
-        </button>
 
         <button
           id="toggle-rotation-btn"
@@ -88,6 +75,25 @@ export default function GroundStationsHeader({
         >
           {autoRotate ? <Play size={12} className="text-[#00FF66]" /> : <Pause size={12} />}
           <span>{autoRotate ? 'ROTATION' : 'STATIC'}</span>
+        </button>
+
+        {/* Day / Night Mode Switch */}
+        <button
+          id="toggle-day-night-btn"
+          onClick={onToggleLightingMode}
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border transition-all font-bold ${
+            lightingMode === 'NIGHT'
+              ? 'bg-indigo-950/70 text-indigo-300 border-indigo-500/60 shadow-[0_0_10px_rgba(99,102,241,0.25)]'
+              : 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
+          }`}
+          title={lightingMode === 'NIGHT' ? 'Current: NIGHT (Click to switch to DAY mode)' : 'Current: DAY (Click to switch to NIGHT mode)'}
+        >
+          {lightingMode === 'NIGHT' ? (
+            <Moon size={12} className="text-indigo-400 fill-indigo-400/40" />
+          ) : (
+            <Sun size={12} className="text-amber-400 fill-amber-400/40" />
+          )}
+          <span>{lightingMode === 'NIGHT' ? 'NIGHT' : 'DAY'}</span>
         </button>
 
         <button

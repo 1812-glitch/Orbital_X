@@ -15,15 +15,24 @@ const seedData = async () => {
       
       // Create admin user so the user can immediately log in
       const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash('admin123', salt);
+      const adminPasswordHash = await bcrypt.hash('admin123', salt);
+      const userPasswordHash = await bcrypt.hash('user123', salt);
 
       const createdUser = await User.create({
         name: 'Admin User',
         email: 'admin@orbitalx.com',
-        passwordHash,
+        passwordHash: adminPasswordHash,
         role: 'ADMIN',
       });
-      console.log('Admin user seeded (admin@orbitalx.com).');
+      console.log('Admin user seeded (admin@orbitalx.com / role: ADMIN).');
+
+      await User.create({
+        name: 'Normal User',
+        email: 'user@orbitalx.com',
+        passwordHash: userPasswordHash,
+        role: 'OPERATOR',
+      });
+      console.log('Normal user seeded (user@orbitalx.com / role: OPERATOR).');
 
       // Only seed dummy satellites/missions if SEED_DUMMY_DATA environment variable is explicitly 'true'
       if (process.env.SEED_DUMMY_DATA === 'true') {

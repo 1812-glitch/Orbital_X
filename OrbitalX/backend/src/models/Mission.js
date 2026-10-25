@@ -14,6 +14,7 @@ const missionSchema = new mongoose.Schema(
     cubesatDesign: { type: mongoose.Schema.Types.Mixed },
     duration: { type: String },
     objective: { type: String },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

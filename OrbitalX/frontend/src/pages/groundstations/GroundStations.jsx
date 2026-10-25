@@ -4,6 +4,7 @@ import telemetryService from '../../services/telemetryService';
 import Scene from '../../components/3d/Scene';
 import OrbitalBottomDock from '../../components/3d/OrbitalBottomDock';
 import { useSatellite } from '../../context/SatelliteContext';
+import { RadioTower } from 'lucide-react';
 import GroundStationsHeader from './components/GroundStationsHeader';
 import GroundStationDetailDrawer from './components/GroundStationDetailDrawer';
 import GroundStationsDiagnosticsModal from './components/GroundStationsDiagnosticsModal';
@@ -14,17 +15,17 @@ export default function GroundStations() {
   const [selectedStation, setSelectedStation] = useState(null);
   const [fleetData, setFleetData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { openDetailModal } = useSatellite();
+  const { openDetailModal, satellites: allFleetSatellites = [] } = useSatellite();
 
   // 3D Earth Globe Controls & Middle Bottom Dock State
   const sceneRef = useRef(null);
-  const [lightingMode, setLightingMode] = useState('TERMINATOR');
   const [isPaused, setIsPaused] = useState(false);
   const [timeScale, setTimeScale] = useState(1);
   const [showRings, setShowRings] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
-  const [nightMode, setNightMode] = useState(true);
   const [autoRotate, setAutoRotate] = useState(true);
+  const [lightingMode, setLightingMode] = useState('DAY');
+  const [isFloatingWindowOpen, setIsFloatingWindowOpen] = useState(true);
 
   // Closable Panels
   const [showNetworkTable, setShowNetworkTable] = useState(true);
@@ -80,6 +81,14 @@ export default function GroundStations() {
     }, 1800);
   };
 
+  const handleFocusStation = (st) => {
+    if (sceneRef.current && st?.latitude !== undefined && st?.longitude !== undefined) {
+      if (sceneRef.current.focusCoordinates) {
+        sceneRef.current.focusCoordinates(st.latitude, st.longitude, 1.85, 1000);
+      }
+    }
+  };
+
   const handleExport = () => {
     const csvContent = "data:text/csv;charset=utf-8," + 
       ["Station ID,Name,Country,Status,Signal Quality,Connected Satellites,Latitude,Longitude",
@@ -123,8 +132,6 @@ export default function GroundStations() {
     <div className="w-full h-full font-sans space-y-4 pb-6 animate-in fade-in duration-300 relative">
       <GroundStationsHeader
         activeStation={activeStation}
-        nightMode={nightMode}
-        setNightMode={setNightMode}
         autoRotate={autoRotate}
         setAutoRotate={setAutoRotate}
         showDiagnostics={showDiagnostics}
@@ -133,107 +140,133 @@ export default function GroundStations() {
         setShowNetworkTable={setShowNetworkTable}
         stationsCount={stations.length}
         fetchData={fetchData}
+        lightingMode={lightingMode}
+        onToggleLightingMode={() => setLightingMode(m => m === 'DAY' ? 'NIGHT' : 'DAY')}
       />
 
-      {/* Main 3D Simulator Viewport & Station HUD */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-        <div className="lg:col-span-8 bg-[#070B14] border border-gray-800 rounded-lg overflow-hidden flex flex-col relative shadow-2xl min-h-[520px] lg:min-h-[600px]">
-          {/* Globe Header HUD */}
-          <div className="h-10 px-4 border-b border-gray-800/80 bg-[#0A0F1F]/80 backdrop-blur-md flex items-center justify-between z-10 font-mono text-xs">
-            <span className="font-bold text-white tracking-wider uppercase">
-              GLOBAL ANTENNA COVERAGE & TELEMETRY BEACONS
+      {/* Main 3D Simulator Viewport with Full-Bleed 3D Globe & Floating Station HUD */}
+      <div className="w-full bg-[#070B14] border border-gray-800 rounded-lg overflow-hidden flex flex-col relative shadow-2xl min-h-[580px] lg:min-h-[660px]">
+        {/* Globe Header HUD */}
+        <div className="h-10 px-4 border-b border-gray-800/80 bg-[#0A0F1F]/80 backdrop-blur-md flex items-center justify-between z-10 font-mono text-xs">
+          <span className="font-bold text-white tracking-wider uppercase">
+            GLOBAL ANTENNA COVERAGE & TELEMETRY BEACONS
+          </span>
+          <div className="flex items-center space-x-3 text-[10px] text-gray-400 uppercase">
+            <span className="flex items-center space-x-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00F0FF] animate-pulse"></span>
+              <span>VERTICAL BEACONS: ACTIVE</span>
             </span>
-            <div className="flex items-center space-x-3 text-[10px] text-gray-400 uppercase">
-              <span className="flex items-center space-x-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00F0FF] animate-pulse"></span>
-                <span>VERTICAL BEACONS: ACTIVE</span>
-              </span>
-              <span className="hidden sm:inline text-gray-600">|</span>
-              <span className="hidden sm:inline">{stations.length} TRACKING STATIONS</span>
-            </div>
-          </div>
-
-          {/* 3D Earth Globe with Vertical Ground Station Beacons */}
-          <div className="flex-1 relative w-full h-full min-h-[500px]">
-            <Scene 
-              ref={sceneRef}
-              fleetData={fleetData}
-              groundStations={stations}
-              selectedStationId={activeStation.stationId || activeStation._id}
-              onSelectStation={(st) => setSelectedStation(st)}
-              showRings={showRings}
-              showLabels={showLabels}
-              showUplinks={true}
-              showStationPins={true}
-              lightingMode={lightingMode}
-              timeScale={timeScale}
-              isPaused={isPaused}
-              autoRotate={autoRotate}
-            />
-
-            <div className="absolute top-4 left-4 pointer-events-none opacity-20 text-[#00F0FF] font-mono font-black text-2xl tracking-[0.3em]">
-              GROUND_STATIONS
-            </div>
-
-            {/* Quick Station Selector Pills Overlaid on Globe bottom above dock */}
-            <div className="absolute bottom-18 left-4 right-4 flex items-center space-x-2 overflow-x-auto pb-1 z-10 pointer-events-auto custom-scrollbar">
-              {stations.map(st => {
-                const isSelected = activeStation.stationId === st.stationId || activeStation._id === st._id;
-                const isOffline = st.status === 'OFFLINE';
-                const isDegraded = st.status === 'DEGRADED';
-
-                return (
-                  <button
-                    key={st._id || st.stationId}
-                    onClick={() => setSelectedStation(st)}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-mono whitespace-nowrap transition-all border flex items-center space-x-1.5 shadow-md ${
-                      isSelected
-                        ? 'bg-[#00F0FF] text-[#0A0F1F] font-bold border-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.4)] scale-[1.02]'
-                        : 'bg-[#0A0F1F]/90 backdrop-blur-md text-gray-300 border-gray-800 hover:text-white hover:border-[#00F0FF]/50'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${
-                      isOffline ? 'bg-[#FF2A2A]' : isDegraded ? 'bg-[#FFB000]' : isSelected ? 'bg-[#0A0F1F]' : 'bg-[#00FF66]'
-                    }`}></span>
-                    <span>{st.stationId}</span>
-                    <span className={isSelected ? 'text-[#0A0F1F] opacity-90' : 'text-gray-400'}>
-                      ({st.country ? st.country.split(' ')[0] : st.name.split(' ')[0]})
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Middle-Bottom Cyber Dock / Controls (Matches 3D Orbital Simulator) */}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-auto scale-90 sm:scale-100 origin-bottom">
-              <OrbitalBottomDock
-                isPaused={isPaused}
-                onTogglePause={() => setIsPaused(!isPaused)}
-                timeScale={timeScale}
-                onChangeTimeScale={setTimeScale}
-                lightingMode={lightingMode}
-                onChangeLightingMode={setLightingMode}
-                showLabels={showLabels}
-                onToggleLabels={() => setShowLabels(!showLabels)}
-                showOrbits={showRings}
-                onToggleOrbits={() => setShowRings(!showRings)}
-                onResetView={() => {
-                  if (sceneRef.current?.resetView) {
-                    sceneRef.current.resetView();
-                  }
-                }}
-                hasSelectedSat={false}
-              />
-            </div>
+            <span className="hidden sm:inline text-gray-600">|</span>
+            <span className="hidden sm:inline">{stations.length} TRACKING STATIONS</span>
+            {!isFloatingWindowOpen && (
+              <button
+                id="show-station-floating-window-btn"
+                onClick={() => setIsFloatingWindowOpen(true)}
+                className="px-2.5 py-1 bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 border border-[#00F0FF]/50 text-[#00F0FF] rounded font-bold transition-all flex items-center space-x-1.5 cursor-pointer text-xs shadow-[0_0_10px_rgba(0,240,255,0.25)]"
+                title="Open Ground Station Details Floating Window"
+              >
+                <RadioTower size={12} className="text-[#00F0FF]" />
+                <span>DETAILS: {activeStation.stationId}</span>
+              </button>
+            )}
           </div>
         </div>
 
-        <GroundStationDetailDrawer
-          activeStation={activeStation}
-          openDetailModal={openDetailModal}
-          setShowDiagnostics={setShowDiagnostics}
-          handleRunDiagnostics={handleRunDiagnostics}
-        />
+        {/* 3D Earth Globe with Vertical Ground Station Beacons */}
+        <div className="flex-1 relative w-full h-[580px] lg:h-[660px]">
+          <Scene 
+            ref={sceneRef}
+            fleetData={fleetData}
+            groundStations={stations}
+            selectedStationId={activeStation.stationId || activeStation._id}
+            onSelectStation={(st) => {
+              setSelectedStation(st);
+              setIsFloatingWindowOpen(true);
+            }}
+            showRings={showRings}
+            showLabels={showLabels}
+            showUplinks={true}
+            showStationPins={true}
+            timeScale={timeScale}
+            isPaused={isPaused}
+            autoRotate={autoRotate}
+            lightingMode={lightingMode}
+          />
+
+          <div className="absolute top-4 left-4 pointer-events-none opacity-20 text-[#00F0FF] font-mono font-black text-2xl tracking-[0.3em]">
+            GROUND_STATIONS
+          </div>
+
+          {/* Closable Floating Window over 3D Globe when open */}
+          {isFloatingWindowOpen && (
+            <div className="absolute top-3 right-3 bottom-20 w-84 sm:w-[420px] max-w-[calc(100vw-24px)] z-30 pointer-events-auto animate-in slide-in-from-right duration-250">
+              <GroundStationDetailDrawer
+                activeStation={activeStation}
+                fleetData={fleetData}
+                allSatellites={allFleetSatellites}
+                onClose={() => setIsFloatingWindowOpen(false)}
+                onFocusStation={handleFocusStation}
+                openDetailModal={openDetailModal}
+                setShowDiagnostics={setShowDiagnostics}
+                handleRunDiagnostics={handleRunDiagnostics}
+              />
+            </div>
+          )}
+
+          {/* Quick Station Selector Pills Overlaid on Globe bottom above dock */}
+          <div className={`absolute bottom-18 left-4 overflow-x-auto pb-1 z-10 pointer-events-auto custom-scrollbar flex items-center space-x-2 transition-all duration-300 ${isFloatingWindowOpen ? 'right-92 sm:right-[440px]' : 'right-4'}`}>
+            {stations.map(st => {
+              const isSelected = activeStation.stationId === st.stationId || activeStation._id === st._id;
+              const isOffline = st.status === 'OFFLINE';
+              const isDegraded = st.status === 'DEGRADED';
+
+              return (
+                <button
+                  key={st._id || st.stationId}
+                  onClick={() => {
+                    setSelectedStation(st);
+                    setIsFloatingWindowOpen(true);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-mono whitespace-nowrap transition-all border flex items-center space-x-1.5 shadow-md cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#00F0FF] text-[#0A0F1F] font-bold border-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.4)] scale-[1.02]'
+                      : 'bg-[#0A0F1F]/90 backdrop-blur-md text-gray-300 border-gray-800 hover:text-white hover:border-[#00F0FF]/50'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${
+                    isOffline ? 'bg-[#FF2A2A]' : isDegraded ? 'bg-[#FFB000]' : isSelected ? 'bg-[#0A0F1F]' : 'bg-[#00FF66]'
+                  }`}></span>
+                  <span>{st.stationId}</span>
+                  <span className={isSelected ? 'text-[#0A0F1F] opacity-90' : 'text-gray-400'}>
+                    ({st.country ? st.country.split(' ')[0] : st.name.split(' ')[0]})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Middle-Bottom Cyber Dock / Controls (Matches 3D Orbital Simulator) */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-auto scale-90 sm:scale-100 origin-bottom">
+            <OrbitalBottomDock
+              isPaused={isPaused}
+              onTogglePause={() => setIsPaused(!isPaused)}
+              timeScale={timeScale}
+              onChangeTimeScale={setTimeScale}
+              showLabels={showLabels}
+              onToggleLabels={() => setShowLabels(!showLabels)}
+              showOrbits={showRings}
+              onToggleOrbits={() => setShowRings(!showRings)}
+              lightingMode={lightingMode}
+              onToggleLightingMode={() => setLightingMode(m => m === 'DAY' ? 'NIGHT' : 'DAY')}
+              onResetView={() => {
+                if (sceneRef.current?.resetView) {
+                  sceneRef.current.resetView();
+                }
+              }}
+              hasSelectedSat={false}
+            />
+          </div>
+        </div>
       </div>
 
       <GroundStationsDiagnosticsModal
@@ -252,7 +285,11 @@ export default function GroundStations() {
         setIsTableMinimized={setIsTableMinimized}
         stations={stations}
         activeStation={activeStation}
-        setSelectedStation={setSelectedStation}
+        allSatellites={allFleetSatellites}
+        setSelectedStation={(st) => {
+          setSelectedStation(st);
+          setIsFloatingWindowOpen(true);
+        }}
         fetchData={fetchData}
         handleExport={handleExport}
         setShowDiagnostics={setShowDiagnostics}

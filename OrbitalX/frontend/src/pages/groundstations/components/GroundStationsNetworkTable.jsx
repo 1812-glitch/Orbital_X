@@ -1,5 +1,6 @@
 import React from 'react';
 import { RadioTower, RefreshCw, Download, ChevronUp, ChevronDown, X, Radio } from 'lucide-react';
+import { resolveStationConnectedSatellites } from './GroundStationDetailDrawer';
 
 export default function GroundStationsNetworkTable({
   showNetworkTable,
@@ -8,6 +9,7 @@ export default function GroundStationsNetworkTable({
   setIsTableMinimized,
   stations,
   activeStation,
+  allSatellites = [],
   setSelectedStation,
   fetchData,
   handleExport,
@@ -115,8 +117,8 @@ export default function GroundStationsNetworkTable({
                       </span>
                     </td>
 
-                    <td className="py-3 px-5 text-center">
-                      {(st.connectedSatellites || []).length || (st.stationId === 'GS-001' ? 2 : st.stationId === 'GS-002' ? 1 : st.stationId === 'GS-003' ? 3 : 2)}
+                    <td className="py-3 px-5 text-center font-bold text-[#00F0FF]">
+                      {resolveStationConnectedSatellites(st, allSatellites).length}
                     </td>
 
                     <td className={`py-3 px-5 text-center font-bold ${

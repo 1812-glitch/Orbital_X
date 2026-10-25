@@ -1,256 +1,35 @@
-// Comprehensive CubeSat Fleet definition with Mission ID bindings and dynamic scaler
-export const CUBESAT_FLEET = [
-  {
-    satelliteId: 'SAT-ALPHA-1',
-    name: 'Alpha One (3U)',
-    fullName: 'Alpha One',
-    formFactor: '3U',
-    orbitType: 'LEO',
-    status: 'ACTIVE',
-    missionId: 'MSN-APOLLO',
-    missionName: 'Apollo Operations',
-    speed: 7.60,
-    altitude: 500.0,
-    distanceFromEarth: 6871.0,
-    temperature: { bus: 20.4, solar: 41.2, battery: 18.0, radio: 29.5 },
-    load: { cpu: 18, memory: 28, busPower: 12.4 },
-    battery: 94.0,
-    propellant: 98.0,
-    solarPanelsDeployed: true,
-    heaterActive: false,
-    attitude: { roll: 0.1, pitch: 0.0, yaw: 1.2, spinRate: 0.04, mode: 'NADIR' },
-    groundStation: 'Toulouse Center (GS-003)',
-    signalStrength: -80,
-    snr: 15.2,
-    packetsDownlinked: 4890,
-    commandHistory: []
-  },
-  {
-    satelliteId: 'SAT-BETA-2',
-    name: 'Beta Two (6U)',
-    fullName: 'Beta Two',
-    formFactor: '6U',
-    orbitType: 'MEO',
-    status: 'ACTIVE',
-    missionId: 'MSN-APOLLO',
-    missionName: 'Apollo Operations',
-    speed: 3.80,
-    altitude: 20189.0,
-    distanceFromEarth: 26560.0,
-    temperature: { bus: 19.5, solar: 37.0, battery: 17.2, radio: 31.0 },
-    load: { cpu: 22, memory: 34, busPower: 22.0 },
-    battery: 91.5,
-    propellant: 95.0,
-    solarPanelsDeployed: true,
-    heaterActive: false,
-    attitude: { roll: 0.3, pitch: -0.4, yaw: 5.6, spinRate: 0.02, mode: 'NADIR' },
-    groundStation: 'Houston Command (GS-002)',
-    signalStrength: -84,
-    snr: 13.8,
-    packetsDownlinked: 6720,
-    commandHistory: []
-  },
-  {
-    satelliteId: 'SAT-GAMMA-3',
-    name: 'Gamma Three (12U)',
-    fullName: 'Gamma Three',
-    formFactor: '12U',
-    orbitType: 'GEO',
-    status: 'ACTIVE',
-    missionId: 'MSN-APOLLO',
-    missionName: 'Apollo Operations',
-    speed: 3.10,
-    altitude: 35786.0,
-    distanceFromEarth: 42164.0,
-    temperature: { bus: 25.1, solar: 55.4, battery: 22.8, radio: 37.0 },
-    load: { cpu: 32, memory: 48, busPower: 45.0 },
-    battery: 95.2,
-    propellant: 91.0,
-    solarPanelsDeployed: true,
-    heaterActive: false,
-    attitude: { roll: 0.0, pitch: 0.0, yaw: 0.5, spinRate: 0.01, mode: 'NADIR' },
-    groundStation: 'Goldstone Deep Space (GS-005)',
-    signalStrength: -89,
-    snr: 12.1,
-    packetsDownlinked: 11200,
-    commandHistory: []
-  },
-  {
-    satelliteId: 'CUBESAT-NANO',
-    name: 'Nano-1 (1U)',
-    fullName: 'CubeSat Nano-1',
-    formFactor: '1U',
-    orbitType: 'LEO',
-    status: 'NOMINAL',
-    missionId: 'MSN-APOLLO',
-    missionName: 'Apollo Operations',
-    speed: 7.64,
-    altitude: 430.0,
-    distanceFromEarth: 6801.0,
-    temperature: { bus: 18.2, solar: 39.0, battery: 16.5, radio: 28.0 },
-    load: { cpu: 14, memory: 22, busPower: 4.8 },
-    battery: 96.5,
-    propellant: 100.0,
-    solarPanelsDeployed: true,
-    heaterActive: false,
-    attitude: { roll: 0.2, pitch: 0.1, yaw: 3.4, spinRate: 0.05, mode: 'SUN_POINT' },
-    groundStation: 'Toulouse Center (GS-003)',
-    signalStrength: -82,
-    snr: 14.1,
-    packetsDownlinked: 3120,
-    commandHistory: []
-  },
-  {
-    satelliteId: 'CUBESAT-ION',
-    name: 'Ion-X (3U)',
-    fullName: 'CubeSat Ion-X',
-    formFactor: '3U',
-    orbitType: 'LEO',
-    status: 'NOMINAL',
-    missionId: 'MSN-APOLLO',
-    missionName: 'Apollo Operations',
-    speed: 7.56,
-    altitude: 512.4,
-    distanceFromEarth: 6883.4,
-    temperature: { bus: 21.8, solar: 44.5, battery: 19.4, radio: 32.1 },
-    load: { cpu: 24, memory: 36, busPower: 16.8 },
-    battery: 89.2,
-    propellant: 94.5,
-    solarPanelsDeployed: true,
-    heaterActive: false,
-    attitude: { roll: 0.5, pitch: -1.1, yaw: 14.2, spinRate: 0.03, mode: 'NADIR' },
-    groundStation: 'Toulouse Center (GS-003)',
-    signalStrength: -78,
-    snr: 15.4,
-    packetsDownlinked: 5410,
-    commandHistory: []
-  },
-  {
-    satelliteId: 'CUBESAT-AERO',
-    name: 'Aero-6 (6U)',
-    fullName: 'CubeSat Aero-6',
-    formFactor: '6U',
-    orbitType: 'LEO',
-    status: 'NOMINAL',
-    missionId: 'MSN-APOLLO',
-    missionName: 'Apollo Operations',
-    speed: 7.62,
-    altitude: 498.0,
-    distanceFromEarth: 6869.0,
-    temperature: { bus: 23.1, solar: 48.0, battery: 21.0, radio: 34.5 },
-    load: { cpu: 28, memory: 42, busPower: 24.5 },
-    battery: 92.0,
-    propellant: 98.0,
-    solarPanelsDeployed: true,
-    heaterActive: false,
-    attitude: { roll: 1.2, pitch: 0.8, yaw: -8.4, spinRate: 0.02, mode: 'SUN_TRACKING' },
-    groundStation: 'Canberra Complex (GS-004)',
-    signalStrength: -74,
-    snr: 16.8,
-    packetsDownlinked: 8920,
-    commandHistory: []
-  },
-  {
-    satelliteId: 'CUBESAT-TERRA',
-    name: 'Terra-12 (12U)',
-    fullName: 'CubeSat Terra-12',
-    formFactor: '12U',
-    orbitType: 'SSO',
-    status: 'NOMINAL',
-    missionId: 'MSN-APOLLO',
-    missionName: 'Apollo Operations',
-    speed: 7.51,
-    altitude: 560.0,
-    distanceFromEarth: 6931.0,
-    temperature: { bus: 24.8, solar: 52.0, battery: 22.4, radio: 36.2 },
-    load: { cpu: 38, memory: 54, busPower: 58.2 },
-    battery: 94.8,
-    propellant: 96.0,
-    solarPanelsDeployed: true,
-    heaterActive: false,
-    attitude: { roll: 0.05, pitch: -0.12, yaw: 1.8, spinRate: 0.01, mode: 'NADIR' },
-    groundStation: 'Svalbard Arctic Base (GS-002)',
-    signalStrength: -71,
-    snr: 18.5,
-    packetsDownlinked: 14200,
-    commandHistory: []
-  },
-  {
-    satelliteId: 'CUBESAT-TITAN',
-    name: 'Titan-16 (16U)',
-    fullName: 'CubeSat Titan-16',
-    formFactor: '16U',
-    orbitType: 'HEO',
-    status: 'NOMINAL',
-    missionId: 'MSN-APOLLO',
-    missionName: 'Apollo Operations',
-    speed: 6.84,
-    altitude: 1240.0,
-    distanceFromEarth: 7611.0,
-    temperature: { bus: 26.5, solar: 58.0, battery: 23.8, radio: 38.9 },
-    load: { cpu: 46, memory: 62, busPower: 86.4 },
-    battery: 98.2,
-    propellant: 92.4,
-    solarPanelsDeployed: true,
-    heaterActive: false,
-    attitude: { roll: -0.4, pitch: 0.6, yaw: -2.2, spinRate: 0.008, mode: 'DEEP_SPACE_COMM' },
-    groundStation: 'Goldstone Deep Space (GS-005)',
-    signalStrength: -68,
-    snr: 21.2,
-    packetsDownlinked: 28940,
-    commandHistory: []
-  }
-];
+// CubeSat Fleet definitions and dynamic real-satellite synthesizer
 
-export const INITIAL_MISSIONS = [
-  {
-    missionId: 'MSN-APOLLO',
-    name: 'Apollo Operations',
-    objective: 'Monitor global climate anomalies and establish deep space comm relays.',
-    status: 'ACTIVE',
-    orbitType: 'LEO / MULTI',
-    count: 8
-  },
-  {
-    missionId: 'MSN-ARTEMIS',
-    name: 'Artemis Deep Relay',
-    objective: 'Autonomous cislunar telemetry relay and radiation survey mesh.',
-    status: 'PLANNING',
-    orbitType: 'HEO / CISLUNAR',
-    count: 4
-  },
-  {
-    missionId: 'MSN-POLARIS',
-    name: 'Polaris Earth Scanner',
-    objective: 'High-inclination sun-synchronous spectral imaging constellation.',
-    status: 'ACTIVE',
-    orbitType: 'SSO',
-    count: 6
-  }
-];
+export const CUBESAT_FLEET = [];
 
-// Dynamically synthesize a full CubeSat simulation object for ANY satellite from DB or API
+export const INITIAL_MISSIONS = [];
+
+// Dynamically synthesize a full CubeSat simulation object for ANY existing satellite from DB or API
 export function synthesizeCubeSatSim(sat, mission = null) {
-  if (!sat) return CUBESAT_FLEET[0];
+  if (!sat) return null;
 
-  const satId = sat.satelliteId || sat._id || 'CUBESAT-GENERIC';
-  const existing = CUBESAT_FLEET.find(f => f.satelliteId === satId);
-  if (existing) return existing;
+  const satId = sat.satelliteId || sat._id || 'UNKNOWN';
 
   const rawType = (sat.type || '').toUpperCase();
-  let formFactor = '3U';
-  if (rawType.includes('16U') || rawType === '16U') formFactor = '16U';
-  else if (rawType.includes('12U') || rawType === '12U') formFactor = '12U';
-  else if (rawType.includes('6U') || rawType === '6U') formFactor = '6U';
-  else if (rawType.includes('1U') || rawType === '1U') formFactor = '1U';
-  else if (rawType.includes('2U') || rawType === '2U') formFactor = '2U';
+  let formFactor = sat.formFactor || '3U';
+  if (!sat.formFactor) {
+    if (rawType.includes('16U') || rawType === '16U') formFactor = '16U';
+    else if (rawType.includes('12U') || rawType === '12U') formFactor = '12U';
+    else if (rawType.includes('6U') || rawType === '6U') formFactor = '6U';
+    else if (rawType.includes('1U') || rawType === '1U') formFactor = '1U';
+    else if (rawType.includes('2U') || rawType === '2U') formFactor = '2U';
+  }
 
-  const mId = mission?.missionId || sat.missionId || 'MSN-APOLLO';
-  const mName = mission?.name || sat.missionName || 'Fleet Operations';
+  const mId = mission?.missionId || sat.missionId || '';
+  const mName = mission?.name || sat.missionName || 'Orbital Fleet';
+
+  const alt = sat.orbitRadius 
+    ? Math.max(250, Math.round(sat.orbitRadius - 6371)) 
+    : (sat.altitude || 510.0);
 
   return {
     satelliteId: satId,
-    name: `${sat.name || satId} (${formFactor})`,
+    name: sat.name ? `${sat.name} (${formFactor})` : `${satId} (${formFactor})`,
     fullName: sat.name || satId,
     formFactor,
     orbitType: sat.orbitType || 'LEO',
@@ -258,17 +37,17 @@ export function synthesizeCubeSatSim(sat, mission = null) {
     missionId: mId,
     missionName: mName,
     speed: sat.orbitSpeed || 7.58,
-    altitude: sat.orbitRadius ? Math.max(300, sat.orbitRadius - 6371) : 510.0,
-    distanceFromEarth: sat.orbitRadius || 6881.0,
+    altitude: alt,
+    distanceFromEarth: sat.orbitRadius || (alt + 6371),
     temperature: { bus: 22.0, solar: 42.0, battery: 20.0, radio: 30.0 },
     load: { cpu: 20, memory: 30, busPower: 15.0 },
-    battery: 90.0,
+    battery: sat.power || 90.0,
     propellant: 95.0,
     solarPanelsDeployed: true,
     heaterActive: false,
     attitude: { roll: 0.1, pitch: -0.2, yaw: 1.5, spinRate: 0.04, mode: 'NADIR' },
-    groundStation: 'Toulouse Center (GS-003)',
-    signalStrength: -79,
+    groundStation: 'Ground Station Alpha (GS-001)',
+    signalStrength: sat.signal || -79,
     snr: 15.0,
     packetsDownlinked: 2400,
     commandHistory: []

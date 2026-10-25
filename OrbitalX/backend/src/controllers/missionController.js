@@ -1,4 +1,6 @@
 const Mission = require('../models/Mission');
+const User = require('../models/User');
+const Satellite = require('../models/Satellite');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
@@ -7,7 +9,10 @@ const ApiResponse = require('../utils/ApiResponse');
 // @route   GET /api/missions
 // @access  Private
 exports.getMissions = asyncHandler(async (req, res) => {
-  const missions = await Mission.find().populate('assignedSatellites').sort({ createdAt: -1 });
+  const missions = await Mission.find()
+    .populate('assignedSatellites')
+    .populate('createdBy', 'name email role')
+    .sort({ createdAt: -1 });
   res.status(200).json(new ApiResponse(200, missions, 'Missions retrieved successfully'));
 });
 
@@ -15,7 +20,9 @@ exports.getMissions = asyncHandler(async (req, res) => {
 // @route   GET /api/missions/:id
 // @access  Private
 exports.getMissionById = asyncHandler(async (req, res) => {
-  const mission = await Mission.findById(req.params.id).populate('assignedSatellites');
+  const mission = await Mission.findById(req.params.id)
+    .populate('assignedSatellites')
+    .populate('createdBy', 'name email role');
   
   if (!mission) {
     throw new ApiError(404, 'Mission not found');
@@ -28,7 +35,7 @@ exports.getMissionById = asyncHandler(async (req, res) => {
 // @route   POST /api/missions
 // @access  Private/Admin
 exports.createMission = asyncHandler(async (req, res) => {
-  const { name, missionId, description, status, launchDate, launchSite, objective, assignedSatellites, formFactor, orbitType, cubesatDesign } = req.body;
+  const { name, missionId, description, status, launchDate, launchSite, objective, assignedSatellites, formFactor, orbitType, cubesatDesign, createdBy } = req.body;
 
   const existingMission = await Mission.findOne({ missionId });
   if (existingMission) {
@@ -46,7 +53,8 @@ exports.createMission = asyncHandler(async (req, res) => {
     assignedSatellites,
     formFactor: formFactor || '3U',
     orbitType: orbitType || 'LEO',
-    cubesatDesign
+    cubesatDesign,
+    createdBy: req.user?._id || createdBy
   });
 
   res.status(201).json(new ApiResponse(201, mission, 'Mission created successfully'));

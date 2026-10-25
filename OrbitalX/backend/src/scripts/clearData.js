@@ -10,6 +10,11 @@ const Satellite = require('../models/Satellite');
 const Telemetry = require('../models/Telemetry');
 const Communication = require('../models/Communication');
 const Alert = require('../models/Alert');
+const Notification = require('../models/Notification');
+const Command = require('../models/Command');
+const AuditLog = require('../models/AuditLog');
+const GroundStation = require('../models/GroundStation');
+const User = require('../models/User');
 
 async function clearData() {
   const uri = process.env.MONGODB_URI;
@@ -20,7 +25,7 @@ async function clearData() {
 
   try {
     console.log('[ClearDB] Connecting to database...');
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
     console.log(`[ClearDB] Connected to: ${mongoose.connection.host} / ${mongoose.connection.name}`);
 
     // Delete all missions
@@ -43,7 +48,27 @@ async function clearData() {
     const alertRes = await Alert.deleteMany({});
     console.log(`[ClearDB] Cleared alerts: ${alertRes.deletedCount} removed`);
 
-    console.log('[ClearDB] SUCCESS: All mission, cubesat, and telemetry data completely cleared from database!');
+    // Delete notifications
+    const notifRes = await Notification.deleteMany({});
+    console.log(`[ClearDB] Cleared notifications: ${notifRes.deletedCount} removed`);
+
+    // Delete commands
+    const cmdRes = await Command.deleteMany({});
+    console.log(`[ClearDB] Cleared commands: ${cmdRes.deletedCount} removed`);
+
+    // Delete audit logs
+    const auditRes = await AuditLog.deleteMany({});
+    console.log(`[ClearDB] Cleared audit logs: ${auditRes.deletedCount} removed`);
+
+    // Delete ground stations
+    const gsRes = await GroundStation.deleteMany({});
+    console.log(`[ClearDB] Cleared ground stations: ${gsRes.deletedCount} removed`);
+
+    // Delete all users
+    const userRes = await User.deleteMany({});
+    console.log(`[ClearDB] Cleared users: ${userRes.deletedCount} removed`);
+
+    console.log('[ClearDB] SUCCESS: All mission, satellite, telemetry, alert, command, log, and user data completely cleared from MongoDB Atlas!');
     await mongoose.disconnect();
     process.exit(0);
   } catch (err) {

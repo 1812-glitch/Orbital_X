@@ -1,11 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import telemetryService from '../services/telemetryService';
-import { Activity, Radio, AlertTriangle, ShieldCheck, Zap, Thermometer, MapPin } from 'lucide-react';
+import { 
+  Activity, 
+  Radio, 
+  AlertTriangle, 
+  ShieldCheck, 
+  Zap, 
+  Thermometer, 
+  MapPin, 
+  Plus, 
+  Target, 
+  Box, 
+  Trash2, 
+  CheckCircle2, 
+  X 
+} from 'lucide-react';
+import CreateMissionModal from '../components/forms/CreateMissionModal';
+import DeployCubeSatModal from '../components/forms/DeployCubeSatModal';
+import DeleteAssetModal from '../components/forms/DeleteAssetModal';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ total: 0, active: 0, warning: 0, offline: 0, avgHealth: 100 });
   const [telemetry, setTelemetry] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Modal states
+  const [isMissionModalOpen, setIsMissionModalOpen] = useState(false);
+  const [isCubeSatModalOpen, setIsCubeSatModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [actionNotice, setActionNotice] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -43,10 +66,66 @@ export default function Dashboard() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-3xl font-bold tracking-widest text-white uppercase mb-2">Fleet Overview</h1>
-        <p className="text-gray-400 font-mono text-sm">System-wide operational metrics and telemetry feed.</p>
+      {/* Header and Operational Action Controls */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-gray-800/80">
+        <div>
+          <h1 className="text-3xl font-bold tracking-widest text-white uppercase mb-2">Fleet Overview</h1>
+          <p className="text-gray-400 font-mono text-sm">System-wide operational metrics and telemetry feed.</p>
+        </div>
+
+        {/* 3 Operational Action Buttons */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Button 1: Add New Mission */}
+          <button
+            onClick={() => setIsMissionModalOpen(true)}
+            className="bg-[#00F0FF] hover:bg-[#82E6E6] text-[#0A0F1F] font-bold py-2.5 px-4 rounded-lg font-mono text-xs tracking-wider uppercase flex items-center space-x-2 transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)] hover:shadow-[0_0_20px_rgba(0,240,255,0.45)] cursor-pointer"
+            title="Initialize a new orbital mission program"
+          >
+            <Target size={15} />
+            <span>Add Mission</span>
+          </button>
+
+          {/* Button 2: Add CubeSat (Asks Global or Existing Mission) */}
+          <button
+            onClick={() => setIsCubeSatModalOpen(true)}
+            className="bg-[#101b33] hover:bg-[#162547] text-[#00F0FF] border border-[#00F0FF]/40 hover:border-[#00F0FF] font-bold py-2.5 px-4 rounded-lg font-mono text-xs tracking-wider uppercase flex items-center space-x-2 transition-all shadow-[0_0_12px_rgba(0,240,255,0.1)] hover:shadow-[0_0_16px_rgba(0,240,255,0.25)] cursor-pointer"
+            title="Deploy CubeSat to Global Fleet or Existing Mission"
+          >
+            <Box size={15} />
+            <span>Add CubeSat</span>
+          </button>
+
+          {/* Button 3: Delete Mission or Satellite (Asks Which to Delete) */}
+          <button
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="bg-[#1c0f17] hover:bg-[#2b1220] text-[#FF4D4D] border border-[#FF2A2A]/40 hover:border-[#FF2A2A] font-bold py-2.5 px-4 rounded-lg font-mono text-xs tracking-wider uppercase flex items-center space-x-2 transition-all shadow-[0_0_12px_rgba(255,42,42,0.1)] hover:shadow-[0_0_16px_rgba(255,42,42,0.25)] cursor-pointer"
+            title="Decommission and delete a Mission or Satellite"
+          >
+            <Trash2 size={15} />
+            <span>Delete Mission / Satellite</span>
+          </button>
+        </div>
       </div>
+
+      {/* Operational Feedback Banner */}
+      {actionNotice && (
+        <div className={`p-4 rounded-lg font-mono text-xs flex items-center justify-between border animate-in slide-in-from-top-2 duration-300 ${
+          actionNotice.type === 'danger'
+            ? 'bg-[#FF2A2A]/10 border-[#FF2A2A]/40 text-[#FF4D4D]'
+            : 'bg-[#00F0FF]/10 border-[#00F0FF]/40 text-[#00F0FF]'
+        }`}>
+          <div className="flex items-center space-x-2.5">
+            <CheckCircle2 size={16} className="shrink-0" />
+            <span>{actionNotice.message}</span>
+          </div>
+          <button 
+            onClick={() => setActionNotice(null)} 
+            className="text-gray-400 hover:text-white p-1 rounded hover:bg-black/30 transition-colors ml-4"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -179,6 +258,49 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+
+      {/* Modal 1: Create New Mission */}
+      <CreateMissionModal
+        isOpen={isMissionModalOpen}
+        onClose={() => setIsMissionModalOpen(false)}
+        onMissionCreated={() => {
+          fetchData();
+          setActionNotice({
+            type: 'success',
+            message: 'Mission directive initialized successfully in MongoDB Atlas.'
+          });
+        }}
+      />
+
+      {/* Modal 2: Deploy CubeSat (Asks Global or Existing Mission) */}
+      <DeployCubeSatModal
+        isOpen={isCubeSatModalOpen}
+        onClose={() => setIsCubeSatModalOpen(false)}
+        onCubeSatCreated={(data) => {
+          fetchData();
+          const targetText = data?.deploymentTarget === 'MISSION' 
+            ? `Mission "${data?.missionName || 'Selected Mission'}"` 
+            : 'Global Fleet';
+          setActionNotice({
+            type: 'success',
+            message: `CubeSat ${data?.satellite?.satelliteId || ''} (${data?.satellite?.name || ''}) successfully deployed to ${targetText}.`
+          });
+        }}
+      />
+
+      {/* Modal 3: Delete Mission or Satellite (Asks Which to Delete) */}
+      <DeleteAssetModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onAssetDeleted={(data) => {
+          fetchData();
+          setActionNotice({
+            type: 'danger',
+            message: `${data.type === 'MISSION' ? 'Mission' : 'Satellite / CubeSat'} "${data.name}" (${data.code}) permanently deleted from MongoDB Atlas.`
+          });
+        }}
+      />
     </div>
   );
 }
+

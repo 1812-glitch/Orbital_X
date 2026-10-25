@@ -32,11 +32,11 @@ function CubeSatGlobeView({
   const [currentGlobeMat, setCurrentGlobeMat] = useState(null);
 
   // Middle Bottom Dock Control States
-  const [lightingMode, setLightingMode] = useState('TERMINATOR'); // 'TERMINATOR' | 'DAY' | 'NIGHT'
   const [isPaused, setIsPaused] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
   const [showOrbits, setShowOrbits] = useState(true);
   const [followSat, setFollowSat] = useState(false);
+  const [lightingMode, setLightingMode] = useState('DAY');
 
   // Concentric Layers & Shader Mesh References
   const concentricGroupRef = useRef(new THREE.Group());
@@ -49,7 +49,7 @@ function CubeSatGlobeView({
 
   const texturesLoadedRef = useRef(false);
   const texturesRef = useRef({});
-  const sunAngleRef = useRef(0.85);
+  const lastCameraTrackTimeRef = useRef(0);
 
   // Fast 60 FPS animation loop refs
   const simTimeRef = useRef(Date.now() / 1000);
@@ -91,8 +91,8 @@ function CubeSatGlobeView({
     connectedStationName: 'Searching for Ground Station...'
   });
 
-  const satId = satellite?.satelliteId || 'CUBESAT-ION';
-  const satName = satellite?.name || 'CubeSat Ion-X';
+  const satId = satellite?.satelliteId || satellite?._id || 'SAT-001';
+  const satName = satellite?.name || 'Active Spacecraft';
   const formFactor = satellite?.formFactor || '3U';
   const altitudeKm = satellite?.altitude || 512.4;
   const inclination = satellite?.attitude?.mode === 'SUN_TRACKING' ? 45.0 : 97.4;
@@ -186,24 +186,27 @@ function CubeSatGlobeView({
       concentricGroupRef.current.add(starfieldRef.current);
     }
 
-    if (day && night) {
-      // Core Earth Surface Shader Material (Unified GLSL: Terminator, Day, Night)
+    if (day) {
+      // Core Earth Surface Shader Material (Day/Night Mode Toggle with Zero Terminator Line)
       if (!surfaceShaderMatRef.current) {
-        const initialMode = lightingMode === 'DAY' ? 1 : lightingMode === 'NIGHT' ? 2 : 0;
+        const isNightVal = lightingMode === 'NIGHT' ? 1.0 : 0.0;
         const mat = new THREE.ShaderMaterial({
           uniforms: {
             dayMap: { value: day },
-            nightMap: { value: night },
+            nightMap: { value: night || day },
             bumpMap: { value: bump },
             specularMap: { value: spec },
-            sunDirection: { value: new THREE.Vector3(1.0, 0.3, 0.5).normalize() },
-            dayNightMode: { value: initialMode }
+            isNight: { value: isNightVal },
+            lightDirection: { value: new THREE.Vector3(0.5, 0.3, 1.0).normalize() }
           },
           vertexShader: EarthSurfaceShader.vertexShader,
           fragmentShader: EarthSurfaceShader.fragmentShader
         });
         surfaceShaderMatRef.current = mat;
         setCurrentGlobeMat(mat);
+        if (globeRef.current?.globeMaterial) {
+          globeRef.current.globeMaterial(mat);
+        }
       }
 
       // Layer 2: Cloud Canopy
@@ -212,12 +215,11 @@ function CubeSatGlobeView({
         const cloudMat = new THREE.MeshStandardMaterial({
           map: clouds,
           transparent: true,
-          opacity: lightingMode === 'NIGHT' ? 0.0 : 0.14,
+          opacity: 0.15,
           blending: THREE.NormalBlending,
           depthWrite: false
         });
         cloudMeshRef.current = new THREE.Mesh(cloudGeo, cloudMat);
-        cloudMeshRef.current.visible = lightingMode !== 'NIGHT';
         concentricGroupRef.current.add(cloudMeshRef.current);
       }
 
@@ -226,12 +228,8 @@ function CubeSatGlobeView({
         const atmoGeo = new THREE.SphereGeometry(102.5, 64, 64);
         const atmoMat = new THREE.ShaderMaterial({
           uniforms: {
-            glowColor: {
-              value: new THREE.Color(
-                lightingMode === 'NIGHT' ? 0x2563eb : lightingMode === 'DAY' ? 0x67e8f9 : 0x00d8ff
-              )
-            },
-            intensity: { value: lightingMode === 'NIGHT' ? 0.45 : 0.70 }
+            glowColor: { value: new THREE.Color(0x00d8ff) },
+            intensity: { value: 0.70 }
           },
           vertexShader: AtmosphereHaloShader.vertexShader,
           fragmentShader: AtmosphereHaloShader.fragmentShader,
@@ -247,9 +245,8 @@ function CubeSatGlobeView({
       // Layer 4: Glowing Atmospheric Rim Ring Billboard
       if (!atmosphereRimRingRef.current) {
         const rimGeo = new THREE.RingGeometry(100.2, 103.4, 128);
-        const rimColor = lightingMode === 'NIGHT' ? 0x2563eb : 0x00f0ff;
         const rimMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(rimColor),
+          color: new THREE.Color(0x00f0ff),
           side: THREE.DoubleSide,
           transparent: true,
           opacity: 0.90,
@@ -263,9 +260,8 @@ function CubeSatGlobeView({
       // Layer 5: Deep Space Outer Rim
       if (!deepSpaceRimRef.current) {
         const rimGeo = new THREE.SphereGeometry(105.0, 48, 48);
-        const rimColor = lightingMode === 'NIGHT' ? 0x1e1b4b : 0x1a8fcc;
         const rimMat = new THREE.MeshBasicMaterial({
-          color: rimColor,
+          color: 0x1a8fcc,
           side: THREE.BackSide,
           transparent: true,
           opacity: 0.02,
@@ -275,85 +271,23 @@ function CubeSatGlobeView({
         concentricGroupRef.current.add(deepSpaceRimRef.current);
       }
 
-      applyLightingMode(lightingMode);
       concentricGroupRef.current.visible = true;
     }
   };
 
-  // 4. Apply Lighting Mode ('TERMINATOR', 'DAY', 'NIGHT')
-  const applyLightingMode = (mode) => {
-    if (!surfaceShaderMatRef.current) return;
-
-    const modeInt = mode === 'DAY' ? 1 : mode === 'NIGHT' ? 2 : 0;
-    if (surfaceShaderMatRef.current.uniforms.dayNightMode) {
-      surfaceShaderMatRef.current.uniforms.dayNightMode.value = modeInt;
-    }
-    surfaceShaderMatRef.current.needsUpdate = true;
-
-    if (globeRef.current?.globeMaterial) {
-      globeRef.current.globeMaterial(surfaceShaderMatRef.current);
-    }
-
-    if (mode === 'DAY') {
-      if (surfaceShaderMatRef.current?.uniforms?.sunDirection) {
-        surfaceShaderMatRef.current.uniforms.sunDirection.value.set(0.0, 0.2, 1.0).normalize();
-      }
-      if (atmosphereMeshRef.current?.material) {
-        atmosphereMeshRef.current.material.uniforms.glowColor.value.setHex(0x67e8f9);
-        atmosphereMeshRef.current.material.uniforms.intensity.value = 0.75;
-      }
-      if (atmosphereRimRingRef.current?.material) {
-        atmosphereRimRingRef.current.material.color.setHex(0x00f0ff);
-        atmosphereRimRingRef.current.material.opacity = 0.92;
-      }
-      if (cloudMeshRef.current) {
-        cloudMeshRef.current.visible = true;
-        cloudMeshRef.current.material.opacity = 0.15;
-      }
-      if (deepSpaceRimRef.current?.material) {
-        deepSpaceRimRef.current.material.color.setHex(0x1a8fcc);
-      }
-    } else if (mode === 'NIGHT') {
-      if (atmosphereMeshRef.current?.material) {
-        atmosphereMeshRef.current.material.uniforms.glowColor.value.setHex(0x2563eb);
-        atmosphereMeshRef.current.material.uniforms.intensity.value = 0.45;
-      }
-      if (atmosphereRimRingRef.current?.material) {
-        atmosphereRimRingRef.current.material.color.setHex(0x2563eb);
-        atmosphereRimRingRef.current.material.opacity = 0.92;
-      }
-      if (cloudMeshRef.current) {
-        cloudMeshRef.current.visible = false;
-        cloudMeshRef.current.material.opacity = 0.0;
-      }
-      if (deepSpaceRimRef.current?.material) {
-        deepSpaceRimRef.current.material.color.setHex(0x1e1b4b);
-      }
-    } else {
-      sunAngleRef.current = 0.85;
-      if (surfaceShaderMatRef.current?.uniforms?.sunDirection) {
-        surfaceShaderMatRef.current.uniforms.sunDirection.value.set(1.0, 0.3, 0.5).normalize();
-      }
-      if (atmosphereMeshRef.current?.material) {
-        atmosphereMeshRef.current.material.uniforms.glowColor.value.setHex(0x00d8ff);
-        atmosphereMeshRef.current.material.uniforms.intensity.value = 0.70;
-      }
-      if (atmosphereRimRingRef.current?.material) {
-        atmosphereRimRingRef.current.material.color.setHex(0x00f0ff);
-        atmosphereRimRingRef.current.material.opacity = 0.90;
-      }
-      if (cloudMeshRef.current) {
-        cloudMeshRef.current.visible = true;
-        cloudMeshRef.current.material.opacity = 0.12;
-      }
-      if (deepSpaceRimRef.current?.material) {
-        deepSpaceRimRef.current.material.color.setHex(0x0a1236);
-      }
-    }
-  };
-
+  // Live Day / Night Lighting Mode Toggle
   useEffect(() => {
-    applyLightingMode(lightingMode);
+    const isNightVal = lightingMode === 'NIGHT' ? 1.0 : 0.0;
+    if (surfaceShaderMatRef.current) {
+      surfaceShaderMatRef.current.uniforms.isNight.value = isNightVal;
+    }
+    if (atmosphereMeshRef.current?.material?.uniforms?.glowColor) {
+      const isNight = isNightVal === 1.0;
+      atmosphereMeshRef.current.material.uniforms.glowColor.value = new THREE.Color(
+        isNight ? 0x0088ff : 0x00d8ff
+      );
+      atmosphereMeshRef.current.material.uniforms.intensity.value = isNight ? 0.85 : 0.70;
+    }
   }, [lightingMode]);
 
   // 5. Preload Photorealistic Earth Textures
@@ -454,21 +388,6 @@ function CubeSatGlobeView({
         if (cloudMeshRef.current) {
           cloudMeshRef.current.rotation.y += deltaSec * 0.025 * speed;
         }
-
-        // Rotate Sun angle for dynamic day/night terminator traversal
-        if (lightingMode === 'TERMINATOR') {
-          sunAngleRef.current += deltaSec * 0.025 * speed;
-          const sunX = Math.cos(sunAngleRef.current);
-          const sunZ = Math.sin(sunAngleRef.current);
-          const sunVec = new THREE.Vector3(sunX, 0.35, sunZ).normalize();
-
-          if (surfaceShaderMatRef.current) {
-            surfaceShaderMatRef.current.uniforms.sunDirection.value.copy(sunVec);
-          }
-          if (atmosphereMeshRef.current?.material) {
-            atmosphereMeshRef.current.material.uniforms.sunDirection.value.copy(sunVec);
-          }
-        }
       }
 
       const currentTime = simTimeRef.current;
@@ -489,10 +408,16 @@ function CubeSatGlobeView({
         const heading = Math.round((Math.atan2(Math.cos((inclination * Math.PI) / 180), Math.cos(state.u)) * 180) / Math.PI);
         lastPosRef.current = { lat, lng, heading };
 
-        // Position CubeSat model EXACTLY on the orbital ring
+        // Position CubeSat model EXACTLY on the orbital ring with stable orthonormal basis
         satMesh.position.set(x, y, z);
-        satMesh.up.set(x, y, z).normalize();
-        satMesh.lookAt(nextX, nextY, nextZ);
+        const pos = new THREE.Vector3(x, y, z);
+        const nextPos = new THREE.Vector3(nextX, nextY, nextZ);
+        const tangent = new THREE.Vector3().subVectors(nextPos, pos).normalize();
+        const radialUp = pos.clone().normalize();
+        const orbitNormal = new THREE.Vector3().crossVectors(radialUp, tangent).normalize();
+        const trueUp = new THREE.Vector3().crossVectors(tangent, orbitNormal).normalize();
+        const rotMatrix = new THREE.Matrix4().makeBasis(orbitNormal, trueUp, tangent);
+        satMesh.quaternion.setFromRotationMatrix(rotMatrix);
 
         // Firing cold-gas thruster plume cone
         if (plumeRef.current) {
@@ -514,9 +439,14 @@ function CubeSatGlobeView({
           ledRef.current.material.opacity = Math.sin(now * blinkSpeed) > 0 ? 1.0 : 0.25;
         }
 
-        // Smooth continuous 60 FPS camera tracking
+        // Dynamic camera tracking: View perspective is Me (screen/camera) -> CubeSat (in front) -> 3D Earth (behind)
         if (followSatRef.current && !isTransitioningRef.current) {
-          globe.pointOfView({ lat, lng, altitude: 1.8 }, 0);
+          const currentPov = globe.pointOfView();
+          globe.pointOfView({
+            lat,
+            lng,
+            altitude: currentPov?.altitude || 1.8
+          }, 0);
         }
 
         // Throttled UI Telemetry & Communication Arcs update (~4-5 Hz)
@@ -560,7 +490,7 @@ function CubeSatGlobeView({
 
     animFrameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animFrameId);
-  }, [satId, inclination, lightingMode]);
+  }, [satId, inclination]);
 
   // Handle follow tracking toggle
   const handleToggleFollow = () => {
@@ -641,12 +571,12 @@ function CubeSatGlobeView({
           onChangeTimeScale={(speed) => {
             if (setWarpSpeed) setWarpSpeed(speed);
           }}
-          lightingMode={lightingMode}
-          onChangeLightingMode={setLightingMode}
           showLabels={showLabels}
           onToggleLabels={() => setShowLabels(!showLabels)}
           showOrbits={showOrbits}
           onToggleOrbits={() => setShowOrbits(!showOrbits)}
+          lightingMode={lightingMode}
+          onToggleLightingMode={() => setLightingMode(m => m === 'DAY' ? 'NIGHT' : 'DAY')}
           onResetView={handleResetCamera}
           followTracking={followSat}
           onToggleTracking={handleToggleFollow}

@@ -5,16 +5,15 @@ import * as THREE from 'three';
  * Based on OrbitalX Specification Manual: "3D World & 3D Orbital Simulator"
  */
 
-// 1. Surface Core Shader (Day / Night Terminator + Ocean Specular Blinn-Phong + Bump)
-// Implements exact mathematical formulation from DAY_NIGHT_TRANSITION_GUIDE.md Section 4 & 5
+// 1. Surface Core Shader (High-Fidelity Photorealistic Earth with Clean Day/Night Mode Toggle, NO Terminator Line)
 export const EarthSurfaceShader = {
   uniforms: {
     dayMap: { value: null },
     nightMap: { value: null },
     bumpMap: { value: null },
     specularMap: { value: null },
-    sunDirection: { value: new THREE.Vector3(1.0, 0.3, 0.5).normalize() },
-    dayNightMode: { value: 0 } // 0 = Terminator, 1 = Day Only, 2 = Night Only
+    isNight: { value: 0.0 }, // 0.0 = DAY, 1.0 = NIGHT
+    lightDirection: { value: new THREE.Vector3(0.5, 0.3, 1.0).normalize() }
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -23,9 +22,7 @@ export const EarthSurfaceShader = {
 
     void main() {
       vUv = uv;
-      // Transform normal to eye/view space (Section 5.1)
       vNormal = normalize(normalMatrix * normal);
-      // Transform vertex position to eye/view space
       vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
@@ -35,8 +32,8 @@ export const EarthSurfaceShader = {
     uniform sampler2D nightMap;
     uniform sampler2D bumpMap;
     uniform sampler2D specularMap;
-    uniform vec3 sunDirection;
-    uniform int dayNightMode; // 0: Terminator, 1: Day Only, 2: Night Only
+    uniform vec3 lightDirection;
+    uniform float isNight; // 0.0 = DAY mode, 1.0 = NIGHT mode
 
     varying vec2 vUv;
     varying vec3 vNormal;
@@ -44,53 +41,38 @@ export const EarthSurfaceShader = {
 
     void main() {
       vec3 normal = normalize(vNormal);
-      vec3 sunDir = normalize(sunDirection);
+      vec3 lightDir = normalize(lightDirection);
+      vec3 viewDir = normalize(-vPosition);
+      float rim = 1.0 - max(dot(viewDir, normal), 0.0);
 
-      // Lighting intensity based on sun incidence angle (Section 4.1)
-      float intensity = dot(normal, sunDir);
+      // --- DAY MODE ILLUMINATION ---
+      float NdotL = max(dot(normal, lightDir), 0.0);
+      float diffuse = NdotL * 0.45 + 0.65;
 
-      // Smooth day/night transition (terminator zone, Section 4.2)
-      float blend = smoothstep(-0.15, 0.25, intensity);
-
-      // Sample textures
       vec4 dayColor = texture2D(dayMap, vUv);
+      vec4 specColor = texture2D(specularMap, vUv);
+
+      // Blinn-Phong specular reflection on daylight oceans
+      vec3 halfDir = normalize(lightDir + viewDir);
+      float specAngle = max(dot(normal, halfDir), 0.0);
+      float specular = pow(specAngle, 24.0) * specColor.r * 0.45;
+
+      // Daylight atmospheric rim brightening
+      vec3 dayRimGlow = vec3(0.0, 0.4, 0.8) * pow(rim, 3.5) * 0.25;
+      vec3 dayFinal = dayColor.rgb * diffuse + vec3(specular) + dayRimGlow;
+
+      // --- NIGHT MODE ILLUMINATION (Black Marble + Glowing Golden City Lights, NO Terminator) ---
       vec4 nightColor = texture2D(nightMap, vUv);
-      vec4 specular = texture2D(specularMap, vUv);
+      vec3 cityLights = nightColor.rgb * vec3(1.65, 1.45, 1.15) * 1.5;
+      vec3 nightOcean = vec3(0.015, 0.025, 0.05);
+      float lightMask = clamp(max(nightColor.r, max(nightColor.g, nightColor.b)) * 2.2, 0.0, 1.0);
+      vec3 nightBase = mix(nightOcean, cityLights, lightMask);
+      vec3 nightRimGlow = vec3(0.0, 0.35, 0.75) * pow(rim, 4.0) * 0.4;
+      vec3 nightFinal = nightBase + nightRimGlow;
 
-      vec3 color;
-      if (dayNightMode == 1) {
-        // ----------------------------------------------------
-        // MODE 1: DAY ONLY (Full daylight across surface)
-        // ----------------------------------------------------
-        float dayLight = max(intensity * 0.4 + 0.8, 0.65);
-        color = dayColor.rgb * dayLight;
-        float specIntensity = pow(max(dot(reflect(-sunDir, normal), normalize(-vPosition)), 0.0), 16.0);
-        color += specular.r * specIntensity * 0.35;
-
-      } else if (dayNightMode == 2) {
-        // ----------------------------------------------------
-        // MODE 2: NIGHT ONLY (City lights glowing worldwide)
-        // ----------------------------------------------------
-        vec3 cityLights = nightColor.rgb * 2.2;
-        vec3 deepNavyOcean = vec3(0.015, 0.025, 0.05);
-        color = max(cityLights, deepNavyOcean);
-
-      } else {
-        // ----------------------------------------------------
-        // MODE 0: TERMINATOR MODE (Default realistic blend, Section 4.3 & 4.4)
-        // ----------------------------------------------------
-        vec3 nightSide = max(nightColor.rgb * 2.2, vec3(0.015, 0.025, 0.05));
-        color = mix(nightSide, dayColor.rgb, blend);
-
-        // Ocean sun glint (only on sunlit hemisphere, Section 4.4)
-        float specIntensity = pow(max(dot(reflect(-sunDir, normal), normalize(-vPosition)), 0.0), 20.0);
-        color += specular.r * specIntensity * 0.4 * blend;
-
-        // Faint ambient light floor
-        color += dayColor.rgb * 0.015;
-      }
-
-      gl_FragColor = vec4(color, 1.0);
+      // Clean toggle between Day and Night (No terminator line across globe)
+      vec3 finalColor = mix(dayFinal, nightFinal, isNight);
+      gl_FragColor = vec4(finalColor, 1.0);
     }
   `
 };
@@ -134,7 +116,7 @@ export const AtmosphereHaloShader = {
 export function createProceduralSatelliteMesh(satelliteData) {
   const group = new THREE.Group();
   const isSelected = satelliteData.isSelected;
-  const slotColor = satelliteData.slotColor || '#00F0FF';
+  const slotColor = satelliteData.slotColor || satelliteData.orbitColor || '#00F0FF';
   const color = new THREE.Color(slotColor);
 
   // Main Satellite Body (CubeSat / Spacecraft Bus)
@@ -207,7 +189,7 @@ export function createProceduralSatelliteMesh(satelliteData) {
   }
 
   // Scale satellite group for proper visibility in orbit
-  const scale = isSelected ? 1.6 : 1.15;
+  const scale = isSelected ? 1.65 : 1.35;
   group.scale.set(scale, scale, scale);
 
   return group;

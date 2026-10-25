@@ -2,24 +2,22 @@ import React, { useState } from 'react';
 import {
   Play,
   Pause,
-  Sun,
-  Moon,
-  Sunset,
   Tag,
   CircleDot,
   RotateCcw,
   Target,
-  ChevronUp
+  ChevronUp,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 /**
  * Orbital Simulator Bottom Dock Controls
- * Replicates the cyber dock in the reference screenshot:
  * - Play / Pause
  * - Speed Multiplier (1x, 2x, 5x, 10x)
- * - Terminator / Day / Night lighting mode segmented toggle
  * - Labels toggle
  * - Orbits toggle
+ * - Day / Night mode toggle
  * - Reset View button
  * - Target Lock button
  */
@@ -28,12 +26,12 @@ export default function OrbitalBottomDock({
   onTogglePause,
   timeScale = 1,
   onChangeTimeScale,
-  lightingMode = 'TERMINATOR', // 'TERMINATOR' | 'DAY' | 'NIGHT'
-  onChangeLightingMode,
   showLabels = true,
   onToggleLabels,
   showOrbits = true,
   onToggleOrbits,
+  lightingMode = 'DAY',
+  onToggleLightingMode,
   onResetView,
   followTracking = false,
   onToggleTracking,
@@ -98,56 +96,6 @@ export default function OrbitalBottomDock({
 
       <div className="h-4 w-px bg-gray-800" />
 
-      {/* 3. Segmented Day / Night / Terminator Mode Toggle */}
-      <div className="flex items-center bg-[#050810] p-0.5 rounded-xl border border-gray-800 text-[11px]">
-        {/* Terminator Mode */}
-        <button
-          id="dock-mode-terminator-btn"
-          onClick={() => onChangeLightingMode('TERMINATOR')}
-          className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-            lightingMode === 'TERMINATOR'
-              ? 'bg-[#00F0FF]/20 border border-[#00F0FF]/50 text-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.3)]'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
-          title="Dynamic Sun-angle terminator with smooth twilight band and ocean glint"
-        >
-          <Sunset size={12} />
-          <span>Terminator</span>
-        </button>
-
-        {/* Day Mode */}
-        <button
-          id="dock-mode-day-btn"
-          onClick={() => onChangeLightingMode('DAY')}
-          className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-            lightingMode === 'DAY'
-              ? 'bg-amber-400/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
-          title="Full daylight surface illumination"
-        >
-          <Sun size={12} />
-          <span>Day</span>
-        </button>
-
-        {/* Night Mode */}
-        <button
-          id="dock-mode-night-btn"
-          onClick={() => onChangeLightingMode('NIGHT')}
-          className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-            lightingMode === 'NIGHT'
-              ? 'bg-indigo-400/20 border border-indigo-400/50 text-indigo-300 shadow-[0_0_12px_rgba(129,140,248,0.3)]'
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
-          title="Nocturnal city lights and dark space view"
-        >
-          <Moon size={12} />
-          <span>Night</span>
-        </button>
-      </div>
-
-      <div className="h-4 w-px bg-gray-800" />
-
       {/* 4. Labels Toggle */}
       <button
         id="dock-toggle-labels-btn"
@@ -176,6 +124,27 @@ export default function OrbitalBottomDock({
       >
         <CircleDot size={12} />
         <span className="hidden sm:inline">Orbits</span>
+      </button>
+
+      {/* 5.5 Day / Night Mode Toggle (Clean switch between Daylight Blue Marble & Nocturnal Black Marble with city lights) */}
+      <button
+        id="dock-toggle-day-night-btn"
+        onClick={onToggleLightingMode}
+        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+          lightingMode === 'NIGHT'
+            ? 'bg-indigo-950/60 border-indigo-500/60 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.3)]'
+            : 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+        }`}
+        title={lightingMode === 'NIGHT' ? 'Current: NIGHT (Click to switch to DAY mode)' : 'Current: DAY (Click to switch to NIGHT mode)'}
+      >
+        {lightingMode === 'NIGHT' ? (
+          <Moon size={12} className="text-indigo-400 fill-indigo-400/40" />
+        ) : (
+          <Sun size={12} className="text-amber-400 fill-amber-400/40" />
+        )}
+        <span className="hidden sm:inline font-bold">
+          {lightingMode === 'NIGHT' ? 'Night' : 'Day'}
+        </span>
       </button>
 
       <div className="h-4 w-px bg-gray-800" />

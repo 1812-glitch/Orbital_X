@@ -12,7 +12,6 @@ import {
   Bell, 
   CheckCheck, 
   ExternalLink, 
-  User,
   Undo2
 } from 'lucide-react';
 
@@ -360,10 +359,6 @@ export default function DashboardHeader({
               </div>
             )}
           </div>
-
-          <button className="text-gray-400 hover:text-white transition-colors p-2">
-            <User size={18} />
-          </button>
         </div>
       </div>
     </header>

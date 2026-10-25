@@ -21,7 +21,6 @@ export default function OrbitalViewer() {
   const lastHandledUrlSatRef = useRef(null);
 
   // Dynamic Simulator State
-  const [lightingMode, setLightingMode] = useState('TERMINATOR'); // 'TERMINATOR' | 'DAY' | 'NIGHT'
   const [isPaused, setIsPaused] = useState(false);
   const [timeScale, setTimeScale] = useState(1);
   const [followTracking, setFollowTracking] = useState(false);
@@ -54,6 +53,9 @@ export default function OrbitalViewer() {
     setAutoRotate,
   } = useOrbitalViewerState();
 
+  // Day / Night Lighting Mode ('DAY' | 'NIGHT')
+  const [lightingMode, setLightingMode] = useState('DAY');
+
   // Sync with URL query parameter (e.g. /orbit?sat=SAT-ALPHA-1)
   useEffect(() => {
     const sat = searchParams.get('sat') || searchParams.get('satelliteId');
@@ -77,19 +79,28 @@ export default function OrbitalViewer() {
       setIsInspectorOpen(true);
     } else {
       setFollowTracking(false);
+      setInspectorSatId(null);
     }
   }, [selectedSatIds, inspectorSatId]);
 
-  // Selected satellite record for inspector HUD
-  const activeInspectedItem = (fleetData || []).find((item) => {
-    const id = item?.satellite?.satelliteId || item?.satellite?._id;
-    return id === inspectorSatId;
-  }) || (selectedSatIds.length > 0 ? (fleetData || []).find(item => (item?.satellite?.satelliteId || item?.satellite?._id) === selectedSatIds[0]) : null);
+  // Selected satellite record for inspector HUD (null in zero selected state)
+  const activeInspectedItem = selectedSatIds.length > 0 ? (
+    (fleetData || []).find((item) => {
+      const id = item?.satellite?.satelliteId || item?.satellite?._id;
+      return id === inspectorSatId || id === selectedSatIds[0];
+    }) || null
+  ) : null;
 
   const handleSelectSatellite = (satId) => {
-    handleToggleSatellite(satId);
-    setInspectorSatId(satId);
-    setIsInspectorOpen(true);
+    if (selectedSatIds.includes(satId)) {
+      // Toggle off to zero-selected state
+      handleToggleSatellite(satId);
+      setInspectorSatId(null);
+    } else {
+      handleToggleSatellite(satId);
+      setInspectorSatId(satId);
+      setIsInspectorOpen(true);
+    }
   };
 
   const handleResetCamera = () => {
@@ -119,9 +130,9 @@ export default function OrbitalViewer() {
             showUplinks={showUplinks}
             autoRotate={autoRotate}
             followTracking={followTracking}
-            lightingMode={lightingMode}
             timeScale={timeScale}
             isPaused={isPaused}
+            lightingMode={lightingMode}
           />
         )}
       </div>
@@ -162,12 +173,20 @@ export default function OrbitalViewer() {
           <div className="flex items-center space-x-1.5 text-xs font-mono text-gray-300 hidden md:flex">
             <SatIcon size={13} className="text-[#00F0FF]" />
             <span>Tracking:</span>
-            <strong className="text-[#00F0FF]">{selectedSatIds.length}/{MAX_SELECTED_SATELLITES}</strong>
-            {selectedSatIds.length > 0 && (
+            <strong className={selectedSatIds.length > 0 ? "text-[#00F0FF]" : "text-gray-400"}>
+              {selectedSatIds.length}/{MAX_SELECTED_SATELLITES}
+            </strong>
+            {selectedSatIds.length > 0 ? (
               <span 
                 className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/25 text-[#00F0FF] border border-[#00F0FF]/60 ml-1"
               >
                 {selectedSatIds[0]}
+              </span>
+            ) : (
+              <span 
+                className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-gray-800/80 text-gray-400 border border-gray-700 ml-1"
+              >
+                ALL SATELLITES (ZERO SELECTED)
               </span>
             )}
           </div>
@@ -275,10 +294,10 @@ export default function OrbitalViewer() {
             setShowLabels={setShowLabels}
             showUplinks={showUplinks}
             setShowUplinks={setShowUplinks}
-            nightMode={lightingMode === 'NIGHT'}
-            setNightMode={(isNight) => setLightingMode(isNight ? 'NIGHT' : 'DAY')}
             autoRotate={autoRotate}
             setAutoRotate={setAutoRotate}
+            lightingMode={lightingMode}
+            setLightingMode={setLightingMode}
           />
         </div>
       )}
@@ -295,12 +314,12 @@ export default function OrbitalViewer() {
           onTogglePause={() => setIsPaused(!isPaused)}
           timeScale={timeScale}
           onChangeTimeScale={setTimeScale}
-          lightingMode={lightingMode}
-          onChangeLightingMode={setLightingMode}
           showLabels={showLabels}
           onToggleLabels={() => setShowLabels(!showLabels)}
           showOrbits={showRings}
           onToggleOrbits={() => setShowRings(!showRings)}
+          lightingMode={lightingMode}
+          onToggleLightingMode={() => setLightingMode(m => m === 'DAY' ? 'NIGHT' : 'DAY')}
           onResetView={handleResetCamera}
           followTracking={followTracking}
           onToggleTracking={() => setFollowTracking(!followTracking)}

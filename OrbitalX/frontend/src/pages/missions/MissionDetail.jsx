@@ -6,6 +6,7 @@ import { communicationService } from '../../services/communicationService';
 import { Target, Calendar, MapPin, Settings, Terminal, Send, AlertTriangle, Box, ArrowLeft, Undo2, Cpu, Globe2, Trash2, Rocket, Plus, Radio, CheckCircle2, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import MissionCubeSatViewer from '../../components/3d/MissionCubeSatViewer';
+import DeployCubeSatModal from '../../components/forms/DeployCubeSatModal';
 
 export default function MissionDetail() {
   const { id } = useParams();
@@ -16,6 +17,7 @@ export default function MissionDetail() {
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [selectedSatId, setSelectedSatId] = useState('');
   const logsEndRef = useRef(null);
@@ -270,13 +272,13 @@ export default function MissionDetail() {
             <button
               type="button"
               id="launch-new-satellite-btn"
-              onClick={handleLaunchNewSatellite}
+              onClick={() => setIsLaunchModalOpen(true)}
               disabled={isLaunching}
               className="bg-[#00FF66] hover:bg-[#82FFB0] text-[#0A0F1F] font-bold px-4 py-2 rounded text-[11px] font-mono tracking-widest uppercase flex items-center space-x-2 shadow-[0_0_20px_rgba(0,255,102,0.4)] transition-all transform hover:scale-[1.02] disabled:opacity-60 cursor-pointer"
-              title={`Launch new satellite for ${mission.name} and configure in 3D Design Studio`}
+              title={`Launch new satellite for ${mission.name}: choose between 3D Studio Assembly or Flight-Ready Presets`}
             >
-              <Rocket size={14} className={isLaunching ? 'animate-bounce text-[#0A0F1F]' : 'text-[#0A0F1F]'} />
-              <span>{isLaunching ? 'LAUNCHING...' : 'LAUNCH NEW SATELLITE'}</span>
+              <Rocket size={14} className="text-[#0A0F1F]" />
+              <span>LAUNCH NEW SATELLITE</span>
             </button>
 
             <Link 
@@ -799,6 +801,23 @@ export default function MissionDetail() {
           </div>
         </div>
       )}
+
+      {/* Launch Satellite Workflow Modal (Asks Assemble Themselves vs Use Presets) */}
+      <DeployCubeSatModal
+        isOpen={isLaunchModalOpen}
+        onClose={() => setIsLaunchModalOpen(false)}
+        initialMissionId={mission?._id}
+        initialMissionObj={mission}
+        initialTarget="MISSION"
+        lockTarget={true}
+        onCubeSatCreated={(data) => {
+          fetchMissionDetail();
+          setDirectiveFeedback({
+            type: 'success',
+            message: `Satellite "${data?.satellite?.name || 'CubeSat'}" successfully deployed to mission "${mission?.name}".`
+          });
+        }}
+      />
     </div>
   );
 }

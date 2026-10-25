@@ -23,10 +23,10 @@ export default function OrbitalSidebar({
   setShowLabels,
   showUplinks,
   setShowUplinks,
-  nightMode,
-  setNightMode,
   autoRotate,
   setAutoRotate,
+  lightingMode = 'DAY',
+  setLightingMode,
 }) {
   return (
     <div className="w-full h-full flex flex-col space-y-4 overflow-y-auto custom-scrollbar p-3.5">
@@ -65,10 +65,10 @@ export default function OrbitalSidebar({
         setShowLabels={setShowLabels}
         showUplinks={showUplinks}
         setShowUplinks={setShowUplinks}
-        nightMode={nightMode}
-        setNightMode={setNightMode}
         autoRotate={autoRotate}
         setAutoRotate={setAutoRotate}
+        lightingMode={lightingMode}
+        setLightingMode={setLightingMode}
       />
     </div>
   );

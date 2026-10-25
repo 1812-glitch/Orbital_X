@@ -1,4 +1,6 @@
+const mongoose = require('mongoose');
 const Alert = require('../models/Alert');
+const Satellite = require('../models/Satellite');
 
 // @desc    Get all alerts with filtering
 // @route   GET /api/alerts
@@ -15,7 +17,16 @@ exports.getAlerts = async (req, res) => {
     }
     
     if (severity && severity !== 'ALL') query.severity = severity;
-    if (satelliteId && satelliteId !== 'ALL') query.satelliteId = satelliteId;
+    if (satelliteId && satelliteId !== 'ALL') {
+      if (mongoose.Types.ObjectId.isValid(satelliteId)) {
+        query.satelliteId = satelliteId;
+      } else {
+        const sat = await Satellite.findOne({
+          $or: [{ satelliteId: satelliteId }, { name: satelliteId }]
+        });
+        if (sat) query.satelliteId = sat._id;
+      }
+    }
 
     const alerts = await Alert.find(query)
       .populate('satelliteId', 'name satelliteId')
@@ -98,7 +109,36 @@ exports.updateAlertStatus = async (req, res) => {
 // @access  Private
 exports.createAlert = async (req, res) => {
   try {
-    const alert = await Alert.create(req.body);
+    const alertData = { ...req.body };
+
+    // Resolve satelliteId if string or invalid ObjectId
+    if (alertData.satelliteId) {
+      if (!mongoose.Types.ObjectId.isValid(alertData.satelliteId)) {
+        const sat = await Satellite.findOne({
+          $or: [
+            { satelliteId: alertData.satelliteId },
+            { name: alertData.satelliteId },
+            { noradId: alertData.satelliteId }
+          ]
+        });
+        if (sat) {
+          alertData.satelliteId = sat._id;
+        } else {
+          // If not found by query, fallback to first available satellite in DB so injection succeeds
+          const fallbackSat = await Satellite.findOne();
+          if (fallbackSat) {
+            alertData.satelliteId = fallbackSat._id;
+          }
+        }
+      }
+    } else {
+      const fallbackSat = await Satellite.findOne();
+      if (fallbackSat) {
+        alertData.satelliteId = fallbackSat._id;
+      }
+    }
+
+    const alert = await Alert.create(alertData);
     const populated = await Alert.findById(alert._id)
       .populate('satelliteId', 'name satelliteId')
       .populate('acknowledgedBy', 'name email');
@@ -111,6 +151,6 @@ exports.createAlert = async (req, res) => {
     res.status(201).json({ success: true, data: populated });
   } catch (error) {
     console.error('Error creating alert:', error);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({ success: false, message: error.message || 'Server Error' });
   }
 };

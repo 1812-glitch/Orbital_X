@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import satelliteService from '../../services/satelliteService';
 import { Search, Plus, Wifi, AlertTriangle, WifiOff, Activity, Trash2, Satellite } from 'lucide-react';
-import CreateSatelliteModal from '../../components/forms/CreateSatelliteModal';
+import DeployCubeSatModal from '../../components/forms/DeployCubeSatModal';
 
 export default function SatelliteFleet() {
   const [satellites, setSatellites] = useState([]);
@@ -215,10 +215,10 @@ export default function SatelliteFleet() {
         </div>
       )}
       
-      <CreateSatelliteModal 
+      <DeployCubeSatModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        onSatelliteCreated={fetchSatellites} 
+        onCubeSatCreated={fetchSatellites} 
       />
     </div>
   );
