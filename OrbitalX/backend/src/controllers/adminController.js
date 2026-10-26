@@ -20,7 +20,8 @@ exports.startSim = async (req, res) => {
     const status = getSimulationStatus();
     startSimulation(status.intervalMs);
 
-    await auditService.logAction({
+    // Non-blocking audit logging
+    auditService.logAction({
       userId: req.user._id,
       source: 'SYS_ADMIN',
       action: 'SIMULATION_START',
@@ -28,7 +29,7 @@ exports.startSim = async (req, res) => {
       details: 'Administrator manually initiated the global simulation engine.',
       severity: 'WARNING',
       ipAddress: req.ip
-    });
+    }).catch(err => console.error('Audit log error in startSim:', err));
 
     res.json({ success: true, data: getSimulationStatus() });
   } catch (error) {
@@ -43,7 +44,8 @@ exports.stopSim = async (req, res) => {
   try {
     stopSimulation();
 
-    await auditService.logAction({
+    // Non-blocking audit logging
+    auditService.logAction({
       userId: req.user._id,
       source: 'SYS_ADMIN',
       action: 'SIMULATION_STOP',
@@ -51,7 +53,7 @@ exports.stopSim = async (req, res) => {
       details: 'Administrator halted the global simulation engine. Telemetry streams paused.',
       severity: 'CRITICAL',
       ipAddress: req.ip
-    });
+    }).catch(err => console.error('Audit log error in stopSim:', err));
 
     res.json({ success: true, data: getSimulationStatus() });
   } catch (error) {

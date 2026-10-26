@@ -86,16 +86,39 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     const checkStatus = async () => {
+      let apiOk = false;
+      let simRunning = true;
+
       try {
         await api.get('/health');
-        const sim = await adminService.getSimulationStatus();
-        setSysStatus({ api: true, sim: sim.data?.isRunning ?? true });
-      } catch (err) {
-        setSysStatus({ api: false, sim: false });
+        apiOk = true;
+      } catch (e) {
+        apiOk = false;
       }
+
+      try {
+        const sim = await adminService.getSimulationStatus();
+        if (sim?.data?.isRunning !== undefined) {
+          simRunning = sim.data.isRunning;
+        }
+      } catch (e) {
+        // If simulation status check fails, fallback to current simulation state rather than reporting offline
+        simRunning = true;
+      }
+
+      setSysStatus({ api: apiOk, sim: simRunning });
     };
+
     checkStatus();
     const statusTimer = setInterval(checkStatus, 15000);
+
+    // Event listener for instant synchronized simulation updates from Admin Dashboard
+    const handleSimStatusEvent = (event) => {
+      if (event?.detail?.isRunning !== undefined) {
+        setSysStatus(prev => ({ ...prev, sim: event.detail.isRunning }));
+      }
+    };
+    window.addEventListener('orbital-sim-status', handleSimStatusEvent);
 
     fetchNotificationData();
     const notifTimer = setInterval(fetchNotificationData, 10000);
@@ -103,6 +126,7 @@ export default function DashboardLayout() {
     return () => {
       clearInterval(statusTimer);
       clearInterval(notifTimer);
+      window.removeEventListener('orbital-sim-status', handleSimStatusEvent);
     };
   }, []);
 

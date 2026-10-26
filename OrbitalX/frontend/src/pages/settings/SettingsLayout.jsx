@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { User, Sliders, Shield, Activity, LogOut, UploadCloud } from 'lucide-react';
+import { User, Sliders, Shield, Activity, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function SettingsLayout() {
@@ -57,16 +57,13 @@ export default function SettingsLayout() {
           </nav>
         </div>
 
-        {/* Bottom Actions based on design mockup */}
-        <div className="p-4 space-y-2 border-t border-gray-800">
-          <button className="w-full flex items-center justify-center space-x-2 bg-[#121C36] border border-gray-700 hover:bg-gray-800 text-gray-300 px-4 py-2 rounded text-xs font-mono tracking-widest transition-colors">
-            <UploadCloud size={14} />
-            <span>DEPLOY CONFIG</span>
-          </button>
-          
-          <div className="flex justify-between px-2 pt-4">
-            <span className="text-gray-500 text-[10px] font-mono tracking-widest cursor-pointer hover:text-gray-300">Support</span>
-            <button onClick={handleLogout} className="text-[#FF2A2A] hover:text-red-400 flex items-center text-[10px] font-mono tracking-widest">
+        {/* Bottom Actions */}
+        <div className="p-4 border-t border-gray-800">
+          <div className="flex justify-between items-center px-2 py-1">
+            <NavLink to="/support" className="text-gray-400 hover:text-[#00F0FF] text-[11px] font-mono tracking-widest transition-colors flex items-center">
+              Support
+            </NavLink>
+            <button onClick={handleLogout} className="text-[#FF2A2A] hover:text-red-400 flex items-center text-[11px] font-mono tracking-widest transition-colors">
               <LogOut size={12} className="mr-1" />
               Sign Out
             </button>

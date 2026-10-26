@@ -99,14 +99,7 @@ export default function Preferences() {
               </div>
             </div>
 
-            <div className="flex justify-between space-x-4 border-t border-gray-800 mt-6 pt-6">
-              <button className="w-1/2 border border-[#00F0FF]/30 text-[#00F0FF] hover:bg-[#00F0FF]/10 py-2 rounded text-[10px] font-mono tracking-widest uppercase transition-colors">
-                Change Cipher
-              </button>
-              <button className="w-1/2 border border-[#FF2A2A]/30 text-[#FF2A2A] hover:bg-[#FF2A2A]/10 py-2 rounded text-[10px] font-mono tracking-widest uppercase transition-colors">
-                Purge All Sessions
-              </button>
-            </div>
+
         </div>
 
       </div>

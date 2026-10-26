@@ -5,12 +5,16 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const router = express.Router();
 
 router.use(requireAuth);
-router.use(requireRole('ADMIN'));
 
+// Simulation status read accessible to all authenticated operators/admins/viewers
 router.get('/simulation/status', getSimulationState);
-router.post('/simulation/start', startSim);
-router.post('/simulation/stop', stopSim);
-router.post('/simulation/speed', changeSimSpeed);
-router.post('/clear-data', clearAllData);
+
+// Simulation controls accessible to ADMIN and OPERATOR
+router.post('/simulation/start', requireRole('ADMIN', 'OPERATOR'), startSim);
+router.post('/simulation/stop', requireRole('ADMIN', 'OPERATOR'), stopSim);
+router.post('/simulation/speed', requireRole('ADMIN', 'OPERATOR'), changeSimSpeed);
+
+// Clear data strictly ADMIN
+router.post('/clear-data', requireRole('ADMIN'), clearAllData);
 
 module.exports = router;

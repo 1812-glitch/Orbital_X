@@ -1,31 +1,46 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Send, 
   Maximize2, 
   Minimize2, 
   Trash2, 
-  Eye 
+  Eye,
+  Radio,
+  Sparkles,
+  Terminal,
+  Plus,
+  RotateCcw
 } from 'lucide-react';
 import satelliteService from '../../services/satelliteService';
+import { groundStationService, FALLBACK_GROUND_STATIONS } from '../../services/groundStationService';
+import { cubesatSimService } from '../../services/cubesatSimService';
 import { useSatellite } from '../../context/SatelliteContext';
 import CommsHeader from './components/CommsHeader';
 import CommsTargetDropdown from './components/CommsTargetDropdown';
 import CommsMetricsSidebar from './components/CommsMetricsSidebar';
 import CommsEventLog from './components/CommsEventLog';
+import { TELECOMMAND_CATEGORIES, ALL_TELECOMMANDS } from './telecommands';
 
 export default function Communications() {
-  const [activeTab, setActiveTab] = useState('COMMAND'); // 'LIVE FEED' | 'COMMAND' | 'ARCHIVE'
   const [satellites, setSatellites] = useState([]);
   const { selectedSatellite, selectSatellite, openDetailModal } = useSatellite();
   const [selectedSat, setSelectedSat] = useState(null);
   const [searchParam, setSearchParam] = useState('');
   const [commandPriority, setCommandPriority] = useState('NORMAL');
   const [commandText, setCommandText] = useState('');
-  const [messages, setMessages] = useState([]);
-  const [eventLogs, setEventLogs] = useState([]);
   const [sending, setSending] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const terminalBottomRef = useRef(null);
+
+  // Ground Stations State
+  const [groundStations, setGroundStations] = useState(FALLBACK_GROUND_STATIONS);
+  const [selectedGS, setSelectedGS] = useState(FALLBACK_GROUND_STATIONS[0]);
+
+  // Command Suggestions & Presets State
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIdx, setActiveSuggestionIdx] = useState(-1);
+  const commandInputRef = useRef(null);
+  const suggestionsBoxRef = useRef(null);
 
   // Closable panels state
   const [showMetricsSidebar, setShowMetricsSidebar] = useState(false);
@@ -65,6 +80,74 @@ export default function Communications() {
     loadFleet();
   }, []);
 
+  // Fetch Ground Stations
+  useEffect(() => {
+    const fetchGS = async () => {
+      try {
+        const res = await groundStationService.getAllGroundStations();
+        const list = res?.data || res || [];
+        if (Array.isArray(list) && list.length > 0) {
+          setGroundStations(list);
+          setSelectedGS(list[0]);
+        }
+      } catch (err) {
+        console.warn('Failed to load ground stations for communications:', err);
+      }
+    };
+    fetchGS();
+  }, []);
+
+  // Filter matching suggestions as user types
+  const matchingSuggestions = useMemo(() => {
+    const query = commandText.trim().toLowerCase();
+    if (!query) return [];
+    return ALL_TELECOMMANDS.filter(cmd => 
+      cmd.code.toLowerCase().includes(query) ||
+      cmd.desc.toLowerCase().includes(query) ||
+      cmd.category.toLowerCase().includes(query)
+    ).slice(0, 8);
+  }, [commandText]);
+
+  // Click outside suggestions overlay to dismiss
+  useEffect(() => {
+    function handleOutsideSuggestions(e) {
+      if (suggestionsBoxRef.current && !suggestionsBoxRef.current.contains(e.target) && commandInputRef.current !== e.target) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideSuggestions);
+    return () => document.removeEventListener('mousedown', handleOutsideSuggestions);
+  }, []);
+
+  const handleSelectSuggestion = (code) => {
+    setCommandText(code);
+    setShowSuggestions(false);
+    setActiveSuggestionIdx(-1);
+    commandInputRef.current?.focus();
+  };
+
+  const handleInputKeyDown = (e) => {
+    if (matchingSuggestions.length === 0 || !showSuggestions) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveSuggestionIdx(prev => (prev + 1) % matchingSuggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveSuggestionIdx(prev => (prev - 1 + matchingSuggestions.length) % matchingSuggestions.length);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const target = activeSuggestionIdx >= 0 ? matchingSuggestions[activeSuggestionIdx] : matchingSuggestions[0];
+      if (target) handleSelectSuggestion(target.code);
+    } else if (e.key === 'Enter' && activeSuggestionIdx >= 0) {
+      e.preventDefault();
+      handleSelectSuggestion(matchingSuggestions[activeSuggestionIdx].code);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setActiveSuggestionIdx(-1);
+    }
+  };
+
   useEffect(() => {
     if (selectedSatellite && satellites.length > 0) {
       const matched = satellites.find(s => s._id === selectedSatellite._id || s.satelliteId === selectedSatellite.satelliteId);
@@ -72,31 +155,150 @@ export default function Communications() {
     }
   }, [selectedSatellite, satellites]);
 
-  useEffect(() => {
-    setMessages([
-      { type: 'system', text: `--- ENCRYPTED COMM SESSION INITIATED AT ${new Date(Date.now() - 15 * 60000).toUTCString().slice(17, 25)} UTC ---` },
-      { 
-        type: 'tx', 
-        sender: 'MISSION CONTROL', 
-        time: '14:18:22 UTC', 
-        text: 'CMD: REQUEST_TELEMETRY_DUMP -ARG FULL -SYS NAV,PWR' 
-      },
-      { 
-        type: 'rx', 
-        sender: 'SAT-001 / ORION', 
-        time: '14:18:25 UTC', 
-        text: 'ACK: CMD_RECEIVED. PREPARING DUMP...\n[OK] NAV DATA PACKET 1/1\n[OK] PWR DATA PACKET 1/2\n[OK] PWR DATA PACKET 2/2\nTX_COMPLETE. 142kb TRANSFERRED.' 
-      }
-    ]);
+  // Defaults & Persistence
+  const DEFAULT_INITIAL_MESSAGES = [
+    { type: 'system', text: `--- ENCRYPTED COMM SESSION INITIATED AT ${new Date(Date.now() - 15 * 60000).toUTCString().slice(17, 25)} UTC ---` },
+    { 
+      type: 'tx', 
+      sender: 'MISSION CONTROL', 
+      time: '14:18:22 UTC', 
+      text: 'CMD: REQUEST_TELEMETRY_DUMP -ARG FULL -SYS NAV,PWR' 
+    },
+    { 
+      type: 'rx', 
+      sender: 'SAT-001 / ORION', 
+      time: '14:18:25 UTC', 
+      text: 'ACK: CMD_RECEIVED. PREPARING DUMP...\n[OK] NAV DATA PACKET 1/1\n[OK] PWR DATA PACKET 1/2\n[OK] PWR DATA PACKET 2/2\nTX_COMPLETE. 142kb TRANSFERRED.' 
+    }
+  ];
 
-    setEventLogs([
-      { time: '14:22:05.112', level: 'INFO', src: 'SYS_COMM', text: 'RX: Packet validation successful. Checksum OK.' },
-      { time: '14:21:45.890', level: 'INFO', src: 'SAT_001', text: 'RX: CMD_ACK (ADJUST_SOLAR_ARRAY) - Status: COMPLETE.' },
-      { time: '14:21:05.002', level: 'INFO', src: 'TX_CNTRL', text: 'TX: Dispatching command ADJUST_SOLAR_ARRAY to SAT_001 via GS-001.' },
-      { time: '14:19:12.445', level: 'WARN', src: 'GS_001', text: 'Signal fluctuation detected. SNR dropped to 12dB momentarily. Auto-corrected.' },
-      { time: '14:18:27.100', level: 'INFO', src: 'DATA_LNK', text: 'RX: Telemetry dump completed. 142kb written to buffer.' }
+  const DEFAULT_INITIAL_LOGS = [
+    { time: '14:22:05.112', level: 'INFO', src: 'SYS_COMM', text: 'RX: Packet validation successful. Checksum OK.' },
+    { time: '14:21:45.890', level: 'INFO', src: 'SAT_001', text: 'RX: CMD_ACK (ADJUST_SOLAR_ARRAY) - Status: COMPLETE.' },
+    { time: '14:21:05.002', level: 'INFO', src: 'TX_CNTRL', text: 'TX: Dispatching command ADJUST_SOLAR_ARRAY to SAT_001 via GS-001.' },
+    { time: '14:19:12.445', level: 'WARN', src: 'GS_001', text: 'Signal fluctuation detected. SNR dropped to 12dB momentarily. Auto-corrected.' },
+    { time: '14:18:27.100', level: 'INFO', src: 'DATA_LNK', text: 'RX: Telemetry dump completed. 142kb written to buffer.' }
+  ];
+
+  const COMMS_STORAGE_KEY = 'orbitalx_comms_persistent_v1';
+
+  // Helper to load persistent state across panel navigation
+  const getStoredCommsState = () => {
+    try {
+      const saved = localStorage.getItem(COMMS_STORAGE_KEY) || sessionStorage.getItem(COMMS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.terminals) && parsed.terminals.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const initialStoredState = getStoredCommsState();
+
+  const [terminals, setTerminals] = useState(() => {
+    return initialStoredState?.terminals || [{ id: 'term-1', name: 'TERMINAL 1', messages: DEFAULT_INITIAL_MESSAGES }];
+  });
+
+  const [activeTerminalId, setActiveTerminalId] = useState(() => {
+    return initialStoredState?.activeTerminalId || 'term-1';
+  });
+
+  const [eventLogs, setEventLogs] = useState(() => {
+    return initialStoredState?.eventLogs || DEFAULT_INITIAL_LOGS;
+  });
+
+  // Permanently save state so navigating between panels (e.g. CubeSat Simulator, Overview) NEVER wipes the terminal
+  useEffect(() => {
+    try {
+      const dataToSave = JSON.stringify({
+        terminals,
+        activeTerminalId,
+        eventLogs
+      });
+      localStorage.setItem(COMMS_STORAGE_KEY, dataToSave);
+      sessionStorage.setItem(COMMS_STORAGE_KEY, dataToSave);
+    } catch (e) {}
+  }, [terminals, activeTerminalId, eventLogs]);
+
+  const activeTerminal = useMemo(() => {
+    return terminals.find(t => t.id === activeTerminalId) || terminals[0] || { id: 'term-1', name: 'TERMINAL 1', messages: [] };
+  }, [terminals, activeTerminalId]);
+
+  const messages = activeTerminal.messages || [];
+
+  const appendMessageToActiveTerminal = (msg) => {
+    setTerminals(prev => prev.map(t => {
+      if (t.id === (activeTerminal?.id || activeTerminalId)) {
+        return { ...t, messages: [...t.messages, msg] };
+      }
+      return t;
+    }));
+  };
+
+  const handleCreateNewTerminal = () => {
+    const newIdx = terminals.length + 1;
+    const newId = `term-${Date.now()}`;
+    const newTerm = {
+      id: newId,
+      name: `TERMINAL ${newIdx}`,
+      messages: [
+        { type: 'system', text: `--- COMMAND TERMINAL ${newIdx} OPENED AT ${new Date().toUTCString().slice(17, 25)} UTC ---` },
+        { type: 'system', text: `Dedicated command & telemetry session active. Ready to uplink.` }
+      ]
+    };
+
+    setTerminals(prev => [...prev, newTerm]);
+    setActiveTerminalId(newId);
+
+    setEventLogs(prev => [
+      {
+        time: new Date().toISOString().slice(11, 23),
+        level: 'INFO',
+        src: 'SYS_COMM',
+        text: `New terminal session spawned: TERMINAL ${newIdx} (${newId}).`
+      },
+      ...prev
     ]);
-  }, []);
+  };
+
+  const handleCloseTerminal = (termId) => {
+    if (terminals.length <= 1) return;
+    const remaining = terminals.filter(t => t.id !== termId);
+    setTerminals(remaining);
+    if (activeTerminalId === termId) {
+      setActiveTerminalId(remaining[remaining.length - 1].id);
+    }
+  };
+
+  const handleResetTerminal = () => {
+    const timeStr = new Date().toUTCString().slice(17, 25) + ' UTC';
+    const currentName = activeTerminal?.name || 'TERMINAL';
+    setTerminals(prev => prev.map(t => {
+      if (t.id === (activeTerminal?.id || activeTerminalId)) {
+        return {
+          ...t,
+          messages: [
+            { type: 'system', text: `--- ${currentName} BUFFER RESET AT ${timeStr} ---` },
+            { type: 'system', text: `Session re-initialized. Ready for uplink commands.` }
+          ]
+        };
+      }
+      return t;
+    }));
+
+    setEventLogs(prev => [
+      {
+        time: new Date().toISOString().slice(11, 23),
+        level: 'WARN',
+        src: 'SYS_COMM',
+        text: `Operator manual reset executed on ${currentName}. Buffer cleared.`
+      },
+      ...prev
+    ]);
+  };
 
   useEffect(() => {
     if (autoScroll) {
@@ -104,63 +306,118 @@ export default function Communications() {
     }
   }, [messages, autoScroll]);
 
-  const handleSendCommand = (e) => {
-    e.preventDefault();
+  // Real Telecommand Dispatch Handler
+  const handleSendCommand = async (e) => {
+    if (e) e.preventDefault();
     if (!commandText.trim()) return;
 
     const newCmd = commandText.trim();
     const timeStr = new Date().toUTCString().slice(17, 25) + ' UTC';
+    const gsId = selectedGS?.stationId || 'GS-001';
+    const gsName = selectedGS?.name || 'Svalbard Sat Station';
+    const satId = selectedSat?.satelliteId || 'SAT-001';
+    const satName = selectedSat?.name || 'ORION';
 
-    setMessages(prev => [
-      ...prev,
-      {
-        type: 'tx',
-        sender: `MISSION CONTROL [${commandPriority}]`,
-        time: timeStr,
-        text: `CMD: ${newCmd}`
-      }
-    ]);
+    // Append TX command to active terminal
+    appendMessageToActiveTerminal({
+      type: 'tx',
+      sender: `MISSION CONTROL [${commandPriority}] via ${gsId} (${gsName})`,
+      time: timeStr,
+      text: `CMD: ${newCmd}`
+    });
 
     setEventLogs(prev => [
       {
         time: new Date().toISOString().slice(11, 23),
         level: 'INFO',
         src: 'TX_CNTRL',
-        text: `TX [${commandPriority}]: Dispatched '${newCmd}' to ${selectedSat?.satelliteId || 'SAT-001'}.`
+        text: `TX [${commandPriority}]: Dispatched '${newCmd}' to ${satId} via ${gsId} (${gsName}).`
       },
       ...prev
     ]);
 
     setCommandText('');
+    setShowSuggestions(false);
     setSending(true);
 
-    setTimeout(() => {
-      setMessages(prev => [
-        ...prev,
-        {
-          type: 'rx',
-          sender: `${selectedSat?.satelliteId || 'SAT-001'} / ${selectedSat?.name || 'ORION'}`,
-          time: new Date().toUTCString().slice(17, 25) + ' UTC',
-          text: `ACK: CMD_EXEC [${newCmd}] SUCCESSFUL.\n[OK] SUBSYSTEM STATUS: NOMINAL\n[OK] BUFFER FLUSHED.`
+    try {
+      const res = await cubesatSimService.sendCommand(satId, newCmd, {
+        priority: commandPriority,
+        groundStation: gsId,
+        groundStationName: gsName
+      });
+
+      const data = res?.data || res;
+      const satState = data?.satellite;
+      const exec = data?.execution;
+      const responseMsg = data?.message || exec?.response || 'TELECOMMAND EXECUTED';
+
+      let telemetryText = `ACK: CMD_EXEC [${newCmd}] SUCCESSFUL via ${gsId}.\n`;
+      telemetryText += `[EXEC] ${responseMsg}\n`;
+      if (satState) {
+        telemetryText += `[SYS] STATE: ${satState.status || 'NOMINAL'} | BAT: ${satState.battery}% | ALT: ${satState.altitude}km | SPEED: ${satState.speed}km/s\n`;
+        telemetryText += `[PWR] SOLAR ARRAYS: ${satState.solarPanelsDeployed ? 'DEPLOYED (+35W)' : 'STOWED (0W)'} | HEATERS: ${satState.heaterActive ? 'ON' : 'OFF'}\n`;
+        if (satState.attitude) {
+          telemetryText += `[ADCS] MODE: ${satState.attitude.mode || 'NADIR'} | SPIN: ${satState.attitude.spinRate} rad/s\n`;
         }
-      ]);
+      }
+      telemetryText += `[LINK] LINK MARGIN: +24.8 dB | SIGNAL: ${satState?.signalStrength || -78} dBm | CHECKSUM: 0x9F4D (OK)`;
+
+      appendMessageToActiveTerminal({
+        type: 'rx',
+        sender: `${satId} / ${satName}`,
+        time: new Date().toUTCString().slice(17, 25) + ' UTC',
+        text: telemetryText
+      });
+
       setEventLogs(prev => [
         {
           time: new Date().toISOString().slice(11, 23),
           level: 'INFO',
-          src: selectedSat?.satelliteId || 'SAT-001',
-          text: `RX: CMD_ACK for '${newCmd}' received with status code 0 (SUCCESS).`
+          src: satId,
+          text: `RX: CMD_ACK for '${newCmd}' executed via ${gsId}. Result: ${responseMsg.slice(0, 50)}`
         },
         ...prev
       ]);
+
+      if (satState) {
+        window.dispatchEvent(new CustomEvent('orbital-telemetry-update', { detail: satState }));
+      }
+    } catch (err) {
+      console.error('Command dispatch error:', err);
+      const errMsg = err?.response?.data?.message || err?.message || 'Uplink transmission error';
+      appendMessageToActiveTerminal({
+        type: 'rx',
+        sender: `${satId} / ${satName}`,
+        time: new Date().toUTCString().slice(17, 25) + ' UTC',
+        text: `ERR: CMD_EXEC [${newCmd}] REJECTED.\n[FAIL] REASON: ${errMsg}\n[STATUS] LINK DEGRADED OR SUBSYSTEM BUSY.`
+      });
+      setEventLogs(prev => [
+        {
+          time: new Date().toISOString().slice(11, 23),
+          level: 'ERROR',
+          src: 'TX_CNTRL',
+          text: `ERR: Failed to execute '${newCmd}' on ${satId}: ${errMsg}`
+        },
+        ...prev
+      ]);
+    } finally {
       setSending(false);
-    }, 1200);
+    }
   };
 
   const handleClearBuffer = () => {
-    setMessages([
-      { type: 'system', text: `--- TERMINAL BUFFER CLEARED AT ${new Date().toUTCString().slice(17, 25)} UTC ---` }
-    ]);
+    setTerminals(prev => prev.map(t => {
+      if (t.id === (activeTerminal?.id || activeTerminalId)) {
+        return {
+          ...t,
+          messages: [
+            { type: 'system', text: `--- TERMINAL BUFFER CLEARED AT ${new Date().toUTCString().slice(17, 25)} UTC ---` }
+          ]
+        };
+      }
+      return t;
+    }));
   };
 
   const handleExportLog = () => {
@@ -217,8 +474,6 @@ export default function Communications() {
     }`}>
       <CommsHeader
         currentSat={currentSat}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
         searchParam={searchParam}
         setSearchParam={setSearchParam}
         showMetricsSidebar={showMetricsSidebar}
@@ -234,22 +489,112 @@ export default function Communications() {
           showMetricsSidebar ? 'xl:col-span-9' : 'xl:col-span-12'
         } w-full bg-[#070B14] border border-gray-800 rounded-lg flex flex-col shadow-2xl relative overflow-hidden transition-all duration-300`}>
           
+          {/* Multi-Terminal Session Tabs & Control Bar */}
+          <div className="flex items-center justify-between bg-[#060A14] border-b border-gray-800 px-3 py-2 overflow-x-auto gap-2">
+            <div className="flex items-center space-x-1.5 shrink-0">
+              {terminals.map((term) => {
+                const isActive = term.id === activeTerminalId;
+                return (
+                  <div
+                    key={term.id}
+                    onClick={() => setActiveTerminalId(term.id)}
+                    className={`group flex items-center space-x-2 px-3 py-1.5 rounded font-mono text-xs cursor-pointer border transition-all ${
+                      isActive
+                        ? 'bg-[#121C36] text-[#00F0FF] border-[#00F0FF]/60 font-bold shadow-[0_0_10px_rgba(0,240,255,0.15)]'
+                        : 'bg-[#0A0F1F]/60 text-gray-400 border-gray-800/80 hover:text-gray-200 hover:bg-[#0A0F1F]'
+                    }`}
+                  >
+                    <Terminal size={12} className={isActive ? 'text-[#00F0FF]' : 'text-gray-500'} />
+                    <span>{term.name}</span>
+                    {terminals.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCloseTerminal(term.id);
+                        }}
+                        className="text-gray-500 hover:text-[#FF3B30] p-0.5 rounded ml-1 transition-colors leading-none text-sm"
+                        title="Close this terminal"
+                      >
+                        &times;
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* + New Terminal Tab Button */}
+              <button
+                type="button"
+                id="new-terminal-btn"
+                onClick={handleCreateNewTerminal}
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded font-mono text-xs text-[#00F0FF] hover:bg-[#00F0FF]/15 border border-[#00F0FF]/30 hover:border-[#00F0FF]/60 transition-all shadow-sm ml-1 cursor-pointer"
+                title="Open New Command Terminal Session (+)"
+              >
+                <Plus size={13} className="shrink-0" />
+                <span className="font-bold text-[11px] uppercase tracking-wider">NEW TERMINAL</span>
+              </button>
+            </div>
+
+            {/* Reset Terminal Button */}
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                type="button"
+                id="reset-terminal-btn"
+                onClick={handleResetTerminal}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded font-mono text-xs text-[#FF3B30] bg-[#FF3B30]/10 hover:bg-[#FF3B30]/20 border border-[#FF3B30]/40 hover:border-[#FF3B30] transition-all cursor-pointer font-bold tracking-wider"
+                title="Reset Active Command Terminal Buffer"
+              >
+                <RotateCcw size={12} className="shrink-0" />
+                <span>RESET TERMINAL</span>
+              </button>
+            </div>
+          </div>
+
           {/* Terminal Session Header */}
           <div className="p-3 sm:p-3.5 border-b border-gray-800 flex flex-wrap items-center justify-between bg-[#0A0F1F] gap-3 relative z-30">
-            <CommsTargetDropdown
-              currentSat={currentSat}
-              isSatDropdownOpen={isSatDropdownOpen}
-              setIsSatDropdownOpen={setIsSatDropdownOpen}
-              satDropdownRef={satDropdownRef}
-              targetTypeFilter={targetTypeFilter}
-              setTargetTypeFilter={setTargetTypeFilter}
-              satSearchTerm={satSearchTerm}
-              setSatSearchTerm={setSatSearchTerm}
-              filteredFleet={filteredFleet}
-              setSelectedSat={setSelectedSat}
-              selectSatellite={selectSatellite}
-              openDetailModal={openDetailModal}
-            />
+            <div className="flex flex-wrap items-center gap-3">
+              <CommsTargetDropdown
+                currentSat={currentSat}
+                isSatDropdownOpen={isSatDropdownOpen}
+                setIsSatDropdownOpen={setIsSatDropdownOpen}
+                satDropdownRef={satDropdownRef}
+                targetTypeFilter={targetTypeFilter}
+                setTargetTypeFilter={setTargetTypeFilter}
+                satSearchTerm={satSearchTerm}
+                setSatSearchTerm={setSatSearchTerm}
+                filteredFleet={filteredFleet}
+                setSelectedSat={setSelectedSat}
+                selectSatellite={selectSatellite}
+                openDetailModal={openDetailModal}
+              />
+
+              {/* Ground Station Selection Dropdown */}
+              <div className="flex items-center space-x-2">
+                <span className="font-mono text-[10px] text-gray-400 uppercase tracking-widest hidden md:inline-block">
+                  GS UPLINK:
+                </span>
+                <div className="flex items-center space-x-2 bg-[#121C36] px-3 py-1.5 rounded border border-[#00FF66]/40 hover:border-[#00FF66] font-mono text-xs shadow-sm transition-colors">
+                  <Radio size={13} className="text-[#00FF66] animate-pulse shrink-0" />
+                  <select
+                    id="comm-gs-selector-header"
+                    value={selectedGS?.stationId || selectedGS?._id || ''}
+                    onChange={(e) => {
+                      const found = groundStations.find(g => (g.stationId === e.target.value || g._id === e.target.value));
+                      if (found) setSelectedGS(found);
+                    }}
+                    className="bg-transparent text-[#00FF66] font-bold text-xs focus:outline-none cursor-pointer pr-1"
+                    title="Select transmitting Ground Station"
+                  >
+                    {groundStations.map((gs) => (
+                      <option key={gs.stationId || gs._id} value={gs.stationId || gs._id} className="bg-[#0A0F1F] text-white">
+                        {gs.stationId}: {gs.name} ({gs.country})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
 
             {/* Right Header Controls */}
             <div className="flex items-center space-x-2 font-mono text-xs">
@@ -336,35 +681,143 @@ export default function Communications() {
             <div ref={terminalBottomRef} />
           </div>
 
-          {/* Bottom Command Dispatch Input Bar */}
-          <form onSubmit={handleSendCommand} className="p-3 sm:p-4 border-t border-gray-800 bg-[#0A0F1F] flex items-center space-x-2">
-            <select
-              value={commandPriority}
-              onChange={(e) => setCommandPriority(e.target.value)}
-              className="bg-[#12192b] border border-gray-800 text-gray-300 font-mono text-xs rounded px-2.5 py-2.5 focus:outline-none focus:border-[#00F0FF]/50 uppercase cursor-pointer shrink-0"
-            >
-              <option value="NORMAL">NORMAL ▼</option>
-              <option value="HIGH">HIGH</option>
-              <option value="EMERGENCY">EMERGENCY</option>
-            </select>
+          {/* Bottom Command Dispatch Input Bar with Categorized Presets & Suggestions */}
+          <div className="relative border-t border-gray-800 bg-[#0A0F1F]">
+            {/* Live Autocomplete Suggestions Overlay */}
+            {showSuggestions && matchingSuggestions.length > 0 && (
+              <div 
+                ref={suggestionsBoxRef}
+                className="absolute bottom-full left-0 right-0 mb-2 bg-[#0A0F1F]/98 border border-[#00F0FF]/50 rounded-xl shadow-[0_-10px_35px_rgba(0,0,0,0.85),0_0_20px_rgba(0,240,255,0.25)] backdrop-blur-xl overflow-hidden z-40 animate-in fade-in slide-in-from-bottom-2 duration-150"
+              >
+                <div className="p-2.5 border-b border-gray-800 bg-[#080D1A] flex items-center justify-between text-[11px] font-mono">
+                  <span className="text-[#00F0FF] font-bold flex items-center space-x-1.5 uppercase tracking-wider">
+                    <Sparkles size={12} />
+                    <span>Suggested Telecommands ({matchingSuggestions.length})</span>
+                  </span>
+                  <span className="text-gray-400 text-[10px] hidden sm:inline">
+                    Press <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-[#00F0FF] border border-gray-700">TAB</kbd> or <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-[#00F0FF] border border-gray-700">ENTER</kbd> to insert · <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-300 border border-gray-700">ESC</kbd> to close
+                  </span>
+                </div>
 
-            <input 
-              type="text"
-              placeholder={`Enter uplink command for ${currentSat.satelliteId || 'target'} (e.g. EXEC ADCS_CALIBRATE, DUMP_LOGS)...`}
-              value={commandText}
-              onChange={(e) => setCommandText(e.target.value)}
-              className="flex-1 bg-[#12192b] border border-gray-800 rounded px-3.5 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 font-mono"
-            />
+                <div className="max-h-60 overflow-y-auto divide-y divide-gray-800/60 font-mono text-xs">
+                  {matchingSuggestions.map((cmd, idx) => {
+                    const isSelected = idx === activeSuggestionIdx;
+                    return (
+                      <button
+                        key={cmd.code}
+                        type="button"
+                        onClick={() => handleSelectSuggestion(cmd.code)}
+                        onMouseEnter={() => setActiveSuggestionIdx(idx)}
+                        className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between transition-colors ${
+                          isSelected ? 'bg-[#00F0FF]/20 text-white' : 'hover:bg-gray-800/60 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2.5 min-w-0">
+                          <span className="font-bold text-[#00F0FF] tracking-wider text-xs shrink-0">
+                            {cmd.code}
+                          </span>
+                          <span className="text-gray-400 text-[11px] truncate hidden md:inline">
+                            — {cmd.desc}
+                          </span>
+                        </div>
+                        <span className="text-[9px] px-2 py-0.5 rounded font-bold uppercase shrink-0 border ml-2 bg-[#00F0FF]/10 text-[#00F0FF] border-[#00F0FF]/30">
+                          {cmd.category}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-            <button
-              type="submit"
-              disabled={sending || !commandText.trim()}
-              className="px-5 py-2.5 bg-[#00F0FF] hover:bg-[#82E6E6] text-[#0A0F1F] rounded font-mono text-xs font-bold uppercase transition-all shadow-[0_0_15px_rgba(0,240,255,0.2)] disabled:opacity-40 flex items-center space-x-1.5 shrink-0"
-            >
-              <Send size={13} />
-              <span className="hidden sm:inline">DISPATCH</span>
-            </button>
-          </form>
+            <form onSubmit={handleSendCommand} className="p-3 sm:p-4 flex flex-wrap lg:flex-nowrap items-center gap-2">
+              {/* Command Priority */}
+              <select
+                value={commandPriority}
+                onChange={(e) => setCommandPriority(e.target.value)}
+                className="bg-[#12192b] border border-gray-800 text-gray-300 font-mono text-xs rounded px-2.5 py-2.5 focus:outline-none focus:border-[#00F0FF]/50 uppercase cursor-pointer shrink-0"
+                title="Command Priority"
+              >
+                <option value="NORMAL">NORMAL ▼</option>
+                <option value="HIGH">HIGH</option>
+                <option value="EMERGENCY">EMERGENCY</option>
+              </select>
+
+              {/* Ground Station Selection Dropdown */}
+              <select
+                id="comm-gs-selector-form"
+                value={selectedGS?.stationId || selectedGS?._id || ''}
+                onChange={(e) => {
+                  const found = groundStations.find(g => (g.stationId === e.target.value || g._id === e.target.value));
+                  if (found) setSelectedGS(found);
+                }}
+                className="bg-[#12192b] border border-gray-800 hover:border-[#00FF66]/50 text-[#00FF66] font-mono text-xs rounded px-2.5 py-2.5 focus:outline-none focus:border-[#00FF66] cursor-pointer shrink-0 transition-colors"
+                title="Transmitting Ground Station"
+              >
+                {groundStations.map((gs) => (
+                  <option key={gs.stationId || gs._id} value={gs.stationId || gs._id} className="bg-[#0A0F1F] text-white">
+                    📡 {gs.stationId} ({gs.name.slice(0, 16)})
+                  </option>
+                ))}
+              </select>
+
+              {/* Categorized Preset Commands Dropdown */}
+              <select
+                id="preset-commands-dropdown"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setCommandText(e.target.value);
+                    setShowSuggestions(false);
+                    commandInputRef.current?.focus();
+                  }
+                }}
+                className="bg-[#121C36] hover:bg-[#182547] border border-[#00F0FF]/40 text-[#00F0FF] font-mono text-xs rounded px-3 py-2.5 focus:outline-none focus:border-[#00F0FF] cursor-pointer shrink-0 transition-all shadow-sm"
+                title="Choose from categorized preset commands"
+              >
+                <option value="" disabled>⚡ PRESET COMMANDS (CATEGORIZED) ▼</option>
+                {TELECOMMAND_CATEGORIES.map((cat) => (
+                  <optgroup key={cat.category} label={`── ${cat.category} ──`} className="bg-[#0A0F1F] text-gray-300 font-bold">
+                    {cat.commands.map((cmd) => (
+                      <option key={cmd.code} value={cmd.code} className="bg-[#0A0F1F] text-white font-mono">
+                        {cmd.code} — {cmd.desc}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+
+              {/* Command Input Box with Live Suggestions */}
+              <div className="relative flex-1 min-w-[200px]">
+                <input 
+                  ref={commandInputRef}
+                  type="text"
+                  placeholder={`Type or select command (e.g. SYS:PING, PWR:SOLAR:DEPLOY)...`}
+                  value={commandText}
+                  onChange={(e) => {
+                    setCommandText(e.target.value);
+                    setShowSuggestions(true);
+                    setActiveSuggestionIdx(0);
+                  }}
+                  onFocus={() => {
+                    if (commandText.trim()) setShowSuggestions(true);
+                  }}
+                  onKeyDown={handleInputKeyDown}
+                  className="w-full bg-[#12192b] border border-gray-800 rounded px-3.5 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/60 font-mono tracking-wider shadow-inner"
+                />
+              </div>
+
+              {/* Dispatch Button */}
+              <button
+                type="submit"
+                disabled={sending || !commandText.trim()}
+                className="px-5 py-2.5 bg-[#00F0FF] hover:bg-[#82E6E6] text-[#0A0F1F] rounded font-mono text-xs font-bold uppercase transition-all shadow-[0_0_15px_rgba(0,240,255,0.2)] disabled:opacity-40 flex items-center space-x-1.5 shrink-0 cursor-pointer"
+              >
+                <Send size={13} className={sending ? 'animate-spin' : ''} />
+                <span>{sending ? 'UPLINKING...' : 'DISPATCH'}</span>
+              </button>
+            </form>
+          </div>
         </div>
 
         <CommsMetricsSidebar

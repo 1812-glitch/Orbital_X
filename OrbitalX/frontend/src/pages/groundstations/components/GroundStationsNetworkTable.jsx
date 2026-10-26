@@ -42,15 +42,6 @@ export default function GroundStationsNetworkTable({
           </button>
 
           <button 
-            onClick={handleExport}
-            title="Export CSV"
-            className="flex items-center space-x-1 text-gray-400 hover:text-[#00F0FF] p-1 rounded hover:bg-gray-800 transition-colors"
-          >
-            <Download size={13} />
-            <span className="text-[11px] hidden sm:inline uppercase">EXPORT CSV</span>
-          </button>
-
-          <button 
             onClick={() => setIsTableMinimized(!isTableMinimized)}
             title={isTableMinimized ? "Expand Station Table" : "Minimize Station Table"}
             className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-800 transition-colors"

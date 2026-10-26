@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
-import { Shield, UserX, UserCheck, Play, Square, RotateCcw, Activity } from 'lucide-react';
+import { Shield, UserX, UserCheck, Play, Square, RotateCcw, Activity, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function AdminDashboard() {
@@ -8,17 +8,21 @@ export default function AdminDashboard() {
   const [logs, setLogs] = useState([]);
   const [simStatus, setSimStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [simActionLoading, setSimActionLoading] = useState(null);
 
   const fetchData = async () => {
     try {
       const [usersData, logsData, simData] = await Promise.all([
         adminService.getUsers(),
-        adminService.getAuditLogs(),
+        adminService.getAuditLogs({ limit: 5 }),
         adminService.getSimulationStatus()
       ]);
       setUsers(usersData.data);
-      setLogs(logsData.data.slice(0, 5)); // Just get 5 recent logs for the timeline
+      setLogs(logsData.data.slice(0, 5)); // 5 recent logs for timeline
       setSimStatus(simData.data);
+      if (simData.data?.isRunning !== undefined) {
+        window.dispatchEvent(new CustomEvent('orbital-sim-status', { detail: { isRunning: simData.data.isRunning } }));
+      }
     } catch (error) {
       console.error('Error fetching admin data:', error);
     } finally {
@@ -41,18 +45,69 @@ export default function AdminDashboard() {
   };
 
   const handleSimStart = async () => {
-    await adminService.startSimulation();
-    fetchData();
+    // 1. Instant optimistic UI update & top header sync
+    setSimStatus(prev => ({ ...(prev || {}), isRunning: true }));
+    setSimActionLoading('start');
+    window.dispatchEvent(new CustomEvent('orbital-sim-status', { detail: { isRunning: true } }));
+
+    try {
+      const res = await adminService.startSimulation();
+      if (res?.data) {
+        setSimStatus(res.data);
+        window.dispatchEvent(new CustomEvent('orbital-sim-status', { detail: { isRunning: res.data.isRunning } }));
+      }
+      // Refresh timeline asynchronously without freezing button
+      adminService.getAuditLogs({ limit: 5 }).then(logsData => {
+        if (logsData?.data) setLogs(logsData.data.slice(0, 5));
+      }).catch(() => {});
+    } catch (error) {
+      console.error('Error starting simulation:', error);
+      fetchData(); // Rollback if error
+    } finally {
+      setSimActionLoading(null);
+    }
   };
 
   const handleSimStop = async () => {
-    await adminService.stopSimulation();
-    fetchData();
+    // 1. Instant optimistic UI update & top header sync
+    setSimStatus(prev => ({ ...(prev || {}), isRunning: false }));
+    setSimActionLoading('stop');
+    window.dispatchEvent(new CustomEvent('orbital-sim-status', { detail: { isRunning: false } }));
+
+    try {
+      const res = await adminService.stopSimulation();
+      if (res?.data) {
+        setSimStatus(res.data);
+        window.dispatchEvent(new CustomEvent('orbital-sim-status', { detail: { isRunning: res.data.isRunning } }));
+      }
+      // Refresh timeline asynchronously without freezing button
+      adminService.getAuditLogs({ limit: 5 }).then(logsData => {
+        if (logsData?.data) setLogs(logsData.data.slice(0, 5));
+      }).catch(() => {});
+    } catch (error) {
+      console.error('Error stopping simulation:', error);
+      fetchData(); // Rollback if error
+    } finally {
+      setSimActionLoading(null);
+    }
   };
 
   const handleSimSpeed = async (speed) => {
-    await adminService.setSimulationSpeed(speed);
-    fetchData();
+    // 1. Instant optimistic UI update
+    setSimStatus(prev => ({
+      ...(prev || {}),
+      speedMultiplier: speed,
+      intervalMs: Math.round(15000 / speed)
+    }));
+    try {
+      const res = await adminService.setSimulationSpeed(speed);
+      if (res?.data) {
+        setSimStatus(res.data);
+      }
+    } catch (error) {
+      console.error('Error setting simulation speed:', error);
+      fetchData();
+    }
   };
 
   if (loading) return <div className="p-8 text-[#00F0FF] font-mono text-center">LOADING ADMIN CONSOLE...</div>;
@@ -205,17 +260,27 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-2 gap-2 mb-6">
               <button 
                 onClick={handleSimStart}
-                disabled={simStatus?.isRunning}
+                disabled={simStatus?.isRunning || simActionLoading !== null}
                 className="bg-gray-800/50 hover:bg-[#00FF66]/10 text-gray-300 hover:text-[#00FF66] border border-gray-700 hover:border-[#00FF66]/50 py-2 rounded text-xs font-mono tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                <Play size={12} className="mr-2" /> START
+                {simActionLoading === 'start' ? (
+                  <RefreshCw size={12} className="mr-2 animate-spin text-[#00FF66]" />
+                ) : (
+                  <Play size={12} className="mr-2" />
+                )}
+                {simActionLoading === 'start' ? 'STARTING...' : 'START'}
               </button>
               <button 
                 onClick={handleSimStop}
-                disabled={!simStatus?.isRunning}
+                disabled={!simStatus?.isRunning || simActionLoading !== null}
                 className="bg-gray-800/50 hover:bg-[#FF2A2A]/10 text-gray-300 hover:text-[#FF2A2A] border border-gray-700 hover:border-[#FF2A2A]/50 py-2 rounded text-xs font-mono tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                <Square size={12} className="mr-2" /> STOP
+                {simActionLoading === 'stop' ? (
+                  <RefreshCw size={12} className="mr-2 animate-spin text-[#FF2A2A]" />
+                ) : (
+                  <Square size={12} className="mr-2" />
+                )}
+                {simActionLoading === 'stop' ? 'STOPPING...' : 'STOP'}
               </button>
             </div>
 

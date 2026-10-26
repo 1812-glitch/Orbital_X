@@ -168,6 +168,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
 
   // Apply Command Effects on CubeSat Physics & Telemetry
   switch (cmdUpper) {
+    case 'PWR:SOLAR:DEPLOY':
     case 'DEPLOY_SOLAR_PANELS':
     case 'DEPLOY_PANELS':
     case 'DEPLOY':
@@ -177,6 +178,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       responseText = `Solar array deployed. Power generation nominal (+35W). Battery charging rate optimized.`;
       break;
 
+    case 'PWR:SOLAR:STOW':
     case 'RETRACT_SOLAR_PANELS':
     case 'STOW_SOLAR_PANELS':
     case 'STOW_PANELS':
@@ -186,6 +188,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       responseText = `Solar arrays stowed in protective configuration. Power input reduced.`;
       break;
 
+    case 'PROP:COLD_GAS:FIRE_500MS':
     case 'COLD_GAS_THRUST':
     case 'ORBITAL_BOOST':
     case 'THRUST':
@@ -202,7 +205,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       sat.status = 'THRUSTER_BURN';
       responseText = `Cold-gas thruster burst fired (+0.08 km/s). Speed boosted to ${sat.speed} km/s. Propellant: ${sat.propellant}%. Burst duration: 3s.`;
       
-      // Auto-cutoff after 3s burst so the system returns to NOMINAL and can be used again!
+      // Auto-cutoff after 3s burst so the system returns to NOMINAL
       setTimeout(() => {
         if (sat && sat.status === 'THRUSTER_BURN') {
           sat.status = 'NOMINAL';
@@ -210,6 +213,24 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       }, 3000);
       break;
 
+    case 'PROP:ION:START_CONTINUOUS':
+      sat.speed = parseFloat((sat.speed + 0.15).toFixed(3));
+      sat.propellant = Math.max(0, parseFloat((sat.propellant - 1.2).toFixed(1)));
+      sat.status = 'THRUSTER_BURN';
+      responseText = `Continuous ion thruster ignition confirmed. Electric propulsion providing steady low-thrust delta-V.`;
+      break;
+
+    case 'PROP:ION:SHUTDOWN':
+      sat.status = 'NOMINAL';
+      responseText = `Ion thruster safely deactivated. Thruster discharge chamber purged.`;
+      break;
+
+    case 'PROP:VALVES:PURGE':
+      sat.propellant = Math.max(0, parseFloat((sat.propellant - 0.5).toFixed(1)));
+      responseText = `Propulsion feedline valves cycled and purged. Plenum pressure normalized to 4.2 bar.`;
+      break;
+
+    case 'ADCS:MODE:DETUMBLE':
     case 'ADCS_DETUMBLE':
     case 'DETUMBLE':
       sat.attitude.spinRate = 0.01;
@@ -220,6 +241,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       responseText = `ADCS B-dot magnetic coils active. Spacecraft rotation stabilized. Angular rate reduced to 0.01 deg/s.`;
       break;
 
+    case 'ADCS:MODE:NADIR':
     case 'POINT_NADIR':
     case 'NADIR':
       sat.attitude.mode = 'NADIR';
@@ -229,6 +251,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       responseText = `Attitude oriented to Earth Nadir vector. Earth observation instruments aligned.`;
       break;
 
+    case 'ADCS:MODE:SUN':
     case 'POINT_SUN':
     case 'SUN':
       sat.attitude.mode = 'SUN_TRACKING';
@@ -237,6 +260,16 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       responseText = `Attitude oriented to Sun-vector. Solar array solar flux maximized.`;
       break;
 
+    case 'ADCS:RW:DESATURATE':
+      sat.load.busPower = parseFloat((sat.load.busPower + 3.0).toFixed(1));
+      responseText = `Magnetorquer firing initiated. Reaction wheel momentum desaturated to < 10% nominal.`;
+      break;
+
+    case 'ADCS:STARTRACKER:CAL':
+      responseText = `Star tracker calibration cycle completed. Attitude quaternion covariance: 0.002 deg RMS.`;
+      break;
+
+    case 'PAYLOAD:CAM:CAPTURE_HIGHRES':
     case 'EXECUTE_PAYLOAD_CAPTURE':
     case 'CAPTURE_IMAGE':
     case 'CAPTURE':
@@ -249,16 +282,45 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       responseText = `Multispectral payload capture completed. 240 MB telemetry frames recorded to flash buffer. CPU Load spiked to ${sat.load.cpu}%.`;
       break;
 
+    case 'PAYLOAD:SAR:SWATH_ACTIVATE':
+      sat.load.busPower = parseFloat((sat.load.busPower + 18.0).toFixed(1));
+      responseText = `Synthetic Aperture Radar (SAR) swath scan completed. 480 MB radar aperture dataset buffered.`;
+      break;
+
+    case 'PAYLOAD:SPEC:INTEGRATE':
+      sat.load.memory = Math.min(95, sat.load.memory + 15);
+      responseText = `Hyperspectral spectrometer integration complete. 128 spectral bands recorded.`;
+      break;
+
+    case 'PAYLOAD:POWER:CYCLE':
+      sat.load.busPower = parseFloat((sat.load.busPower - 6.0).toFixed(1));
+      setTimeout(() => { if (sat) sat.load.busPower = parseFloat((sat.load.busPower + 6.0).toFixed(1)); }, 2000);
+      responseText = `Payload power bus cycled. Sensor hardware initialized cleanly.`;
+      break;
+
+    case 'COMMS:DOWNLINK:START_BURST':
     case 'START_DATA_DOWNLINK':
     case 'DOWNLINK':
+    case 'TLM:DUMP':
       sat.status = 'DOWNLINKING';
       sat.load.memory = Math.max(12, sat.load.memory - 28);
       sat.temperature.radio = parseFloat((sat.temperature.radio + 5.2).toFixed(1));
       sat.packetsDownlinked += 450;
       sat.load.busPower = parseFloat((sat.load.busPower + 9.0).toFixed(1));
-      responseText = `X-Band high-speed carrier active with ${sat.groundStation}. Flushed 450 science packets. Memory load reduced to ${sat.load.memory}%.`;
+      responseText = `High-speed downlink carrier active with ground link. Flushed 450 telemetry packets. Memory load reduced to ${sat.load.memory}%.`;
       break;
 
+    case 'COMMS:TX:HIGH_POWER':
+      sat.load.busPower = parseFloat((sat.load.busPower + 6.5).toFixed(1));
+      responseText = `Transmitter power amplified to 5.0W high-gain broadcast. Link margin elevated by +6.2 dB.`;
+      break;
+
+    case 'COMMS:TX:LOW_POWER':
+      sat.load.busPower = parseFloat(Math.max(8, sat.load.busPower - 4.0).toFixed(1));
+      responseText = `Transmitter throttled to 1.0W low-power beacon mode.`;
+      break;
+
+    case 'SAFE:ENTER_SAFE_MODE':
     case 'ENTER_SAFE_MODE':
     case 'SAFE_MODE':
     case 'SAFE':
@@ -267,18 +329,26 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       sat.load.memory = 15;
       sat.load.busPower = 6.4;
       sat.temperature.bus = 15.2;
-      responseText = `SAFE MODE engaged. Non-critical payloads powered down. CPU load throttled to 8% to conserve battery reserve.`;
+      await Satellite.findByIdAndUpdate(dbSat._id, { status: 'SAFE_MODE' }).catch(() => {});
+      responseText = `SAFE MODE engaged. Non-critical payloads powered down. CPU load throttled to 8% to conserve battery reserve. Database status set to SAFE_MODE.`;
       break;
 
+    case 'SAFE:RESUME_NORMAL_OPS':
     case 'RESUME_NORMAL_OPS':
     case 'NORMAL_OPS':
     case 'RESUME':
       sat.status = 'NOMINAL';
       sat.load.cpu = 24;
       sat.load.busPower = 16.5;
-      responseText = `Normal operations resumed. All primary bus subsystems reporting nominal status.`;
+      await Satellite.findByIdAndUpdate(dbSat._id, { status: 'ACTIVE' }).catch(() => {});
+      responseText = `Normal operations resumed. All primary bus subsystems reporting nominal status. Database status set to ACTIVE.`;
       break;
 
+    case 'SAFE:BEACON:TRANSMIT':
+      responseText = `UHF emergency distress beacon transmitted on 437.525 MHz. Ground network notified.`;
+      break;
+
+    case 'PWR:BAT:HEATERS_ON':
     case 'CYCLE_HEATERS':
     case 'HEATERS_ON':
     case 'TOGGLE_HEATERS':
@@ -298,6 +368,7 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       }
       break;
 
+    case 'PWR:BAT:HEATERS_OFF':
     case 'HEATERS_OFF':
     case 'HEATER_OFF':
       sat.heaterActive = false;
@@ -307,11 +378,23 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       responseText = `Thermal management heaters powered OFF. Yellow heater indicator OFF.`;
       break;
 
+    case 'PWR:BUS:SHED_LOADS':
+    case 'SHED_LOADS':
+      sat.load.busPower = parseFloat(Math.max(8, sat.load.busPower - 10.0).toFixed(1));
+      responseText = `Non-essential payload and secondary buses isolated. Power draw reduced by 10W.`;
+      break;
+
+    case 'PWR:STATUS:GET':
+      responseText = `EPS TELEMETRY: Battery SOC: ${sat.battery}% | Voltage: 8.2V | Bus: ${sat.load.busPower}W | Solar Gen: ${sat.solarPanelsDeployed ? '+35W' : '0W'}.`;
+      break;
+
+    case 'SYS:PING':
     case 'PING_DIAGNOSTICS':
     case 'PING':
       responseText = `DIAGNOSTIC PING OK. EPS: 100% | CDH: 100% | ADCS: 98% | COMM: 99% | Round-Trip Latency: 14.2ms.`;
       break;
 
+    case 'SYS:REBOOT:OBC':
     case 'REBOOT_OBC':
       sat.load.cpu = 95;
       setTimeout(() => {
@@ -320,9 +403,27 @@ const executeCubeSatCommand = asyncHandler(async (req, res) => {
       responseText = `Onboard computer (OBC) warm reboot sequence completed. Firmware checksum: 0x8F4A verified.`;
       break;
 
+    case 'SYS:MEM:FLUSH':
+    case 'MEM_FLUSH':
+      sat.load.memory = 12;
+      responseText = `Volatile flash buffer purged. 0 bad blocks flagged. Available storage: 3.8 GB.`;
+      break;
+
+    case 'SYS:CLOCK:SYNC':
+    case 'CLOCK_SYNC':
+      responseText = `Spacecraft Real-Time Clock (RTC) synchronized with Ground UTC. Drift offset: +0.0012s corrected.`;
+      break;
+
+    case 'SYS:SELFTEST:FULL':
+    case 'SELFTEST':
+      sat.load.cpu = 88;
+      setTimeout(() => { if (sat) sat.load.cpu = 25; }, 2500);
+      responseText = `Full subsystem BIST passed: EPS [OK] · OBC [OK] · ADCS Gyros [OK] · S-Band Radio [OK] · Flash Storage [OK].`;
+      break;
+
     default:
       // Handle generic or custom command parameter
-      responseText = `Custom telecommand [${cmdUpper}] accepted and executed by onboard scheduler.`;
+      responseText = `Telecommand [${cmdUpper}] accepted and executed by onboard flight executive.`;
       sat.load.cpu = Math.min(95, sat.load.cpu + 8);
       break;
   }

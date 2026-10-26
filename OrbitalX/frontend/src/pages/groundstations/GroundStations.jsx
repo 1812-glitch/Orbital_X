@@ -89,20 +89,6 @@ export default function GroundStations() {
     }
   };
 
-  const handleExport = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + 
-      ["Station ID,Name,Country,Status,Signal Quality,Connected Satellites,Latitude,Longitude",
-        ...stations.map(s => `"${s.stationId}","${s.name}","${s.country}","${s.status}","${s.signalQuality || 90}%","${(s.connectedSatellites || []).length}","${s.latitude}","${s.longitude}"`)
-      ].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `orbitalx_ground_stations_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-4">
@@ -291,7 +277,6 @@ export default function GroundStations() {
           setIsFloatingWindowOpen(true);
         }}
         fetchData={fetchData}
-        handleExport={handleExport}
         setShowDiagnostics={setShowDiagnostics}
         handleRunDiagnostics={handleRunDiagnostics}
       />

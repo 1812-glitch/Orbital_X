@@ -43,7 +43,7 @@ export default function CubeSatStudio() {
   const [lastAction, setLastAction] = useState(null);
   const [highlightedComponentId, setHighlightedComponentId] = useState(null);
 
-  // Load from query parameters (when launching from a mission) or local storage on mount
+  // Load mission name and form factor on mount, keeping canvas empty until user mounts components or loads a preset
   useEffect(() => {
     if (satNameParam || missionId) {
       if (satNameParam) setMissionName(decodeURIComponent(satNameParam));
@@ -52,14 +52,8 @@ export default function CubeSatStudio() {
       if (formFactorParam && FORM_FACTORS[formFactorParam]) {
         setFormFactor(formFactorParam);
       }
-
-      setMountedComponents({
-        'obc_core': 1,
-        'battery_pack': 1,
-        'solar_panel_1u': 2,
-        'antenna_deployable': 1,
-        'camera_visible': 1
-      });
+      // Always start with empty canvas on entering 3D studio
+      setMountedComponents({});
       return;
     }
 
@@ -70,11 +64,12 @@ export default function CubeSatStudio() {
         if (parsed.missionName) setMissionName(parsed.missionName);
         if (parsed.formFactor) setFormFactor(parsed.formFactor);
         if (parsed.targetOrbit) setTargetOrbit(parsed.targetOrbit);
-        if (parsed.mountedComponents) setMountedComponents(parsed.mountedComponents);
       } catch (e) {
-        console.error('Failed to load saved design', e);
+        console.error('Failed to load saved design info', e);
       }
     }
+    // Always start with empty canvas on entering 3D studio
+    setMountedComponents({});
   }, [satNameParam, formFactorParam, missionId]);
 
   const showToast = (msg, type = 'success') => {
@@ -452,6 +447,7 @@ export default function CubeSatStudio() {
         setDiagnosticsOpen={setDiagnosticsOpen}
         warningsCount={warnings.length === 1 && warnings[0].startsWith('ALL SYSTEMS') ? 0 : warnings.length}
         totalParts={totalParts}
+        onLoadPreset={handleLoadPreset}
       />
 
       {/* Active Mission Satellite Design Mode Banner */}

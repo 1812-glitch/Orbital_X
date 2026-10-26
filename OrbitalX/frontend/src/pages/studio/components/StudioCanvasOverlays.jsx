@@ -48,20 +48,24 @@ export default function StudioCanvasOverlays({
 
       {/* Empty State Overlay */}
       {totalMounted === 0 && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <div className="bg-[#050810]/75 border border-[#00F0FF]/30 backdrop-blur-md px-6 py-4 rounded-xl text-center shadow-2xl pointer-events-auto max-w-sm">
-            <h3 className="font-mono text-sm tracking-widest text-[#00F0FF] uppercase mb-1 font-bold">
-              EMPTY DESIGN SPACE
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+          <div className="bg-[#0A0F1F]/90 border border-[#00F0FF]/40 backdrop-blur-md px-8 py-6 rounded-2xl text-center shadow-[0_0_35px_rgba(0,240,255,0.2)] pointer-events-auto max-w-md animate-in fade-in zoom-in-95 duration-300">
+            <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/50 flex items-center justify-center text-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.3)]">
+              ⚡
+            </div>
+            <h3 className="font-mono text-base tracking-widest text-white uppercase mb-2 font-bold">
+              EMPTY ASSEMBLY CANVAS
             </h3>
-            <p className="font-mono text-xs text-gray-400 mb-3">
-              Select components from the left hardware library to begin building your {formFactor} CubeSat.
+            <p className="font-mono text-xs text-gray-400 mb-5 leading-relaxed">
+              The 3D design space is currently empty. Mount components from the hardware library, or populate with the default nominal preset.
             </p>
             {onLoadPreset && (
               <button
+                id="btn-use-preset"
                 onClick={() => onLoadPreset(formFactor)}
-                className="px-3.5 py-1.5 bg-[#00F0FF]/20 hover:bg-[#00F0FF]/30 border border-[#00F0FF]/60 text-[#00F0FF] rounded-lg font-mono text-xs font-bold transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)] hover:shadow-[0_0_20px_rgba(0,240,255,0.4)]"
+                className="w-full py-2.5 px-6 bg-[#00F0FF] hover:bg-[#00D0DF] text-[#0A0F1F] rounded-xl font-mono text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_20px_rgba(0,240,255,0.45)] hover:shadow-[0_0_30px_rgba(0,240,255,0.6)] cursor-pointer flex items-center justify-center space-x-2"
               >
-                ⚡ LOAD {formFactor} NOMINAL PRESET
+                <span>USE PRESET</span>
               </button>
             )}
           </div>

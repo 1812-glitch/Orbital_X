@@ -159,21 +159,7 @@ export default function OrbitalBottomDock({
         <RotateCcw size={14} />
       </button>
 
-      {/* 7. Target Tracking Lock Button (Quick Trigger) */}
-      {hasSelectedSat && (
-        <button
-          id="dock-target-track-btn"
-          onClick={onToggleTracking}
-          className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-            followTracking
-              ? 'bg-[#00FF66]/20 border-[#00FF66] text-[#00FF66] shadow-[0_0_12px_rgba(0,255,102,0.35)] animate-pulse'
-              : 'bg-[#050810] hover:bg-gray-800 border-gray-800 text-gray-300 hover:text-[#00FF66]'
-          }`}
-          title={followTracking ? 'Camera locked onto satellite' : 'Lock camera onto active satellite'}
-        >
-          <Target size={14} className={followTracking ? 'animate-spin' : ''} />
-        </button>
-      )}
+
     </div>
   );
 }

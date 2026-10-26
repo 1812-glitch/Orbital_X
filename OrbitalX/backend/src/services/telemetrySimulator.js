@@ -167,8 +167,10 @@ const startSimulation = (intervalMs = 15000) => {
   currentIntervalMs = intervalMs;
   isRunning = true;
   console.log(`Starting telemetry simulation every ${intervalMs}ms...`);
-  // Generate initial batch immediately
-  generateMockTelemetry();
+  // Generate initial batch asynchronously in background without blocking response
+  setImmediate(() => {
+    generateMockTelemetry().catch(err => console.error('Initial telemetry error:', err));
+  });
   intervalId = setInterval(generateMockTelemetry, intervalMs);
   return intervalId;
 };

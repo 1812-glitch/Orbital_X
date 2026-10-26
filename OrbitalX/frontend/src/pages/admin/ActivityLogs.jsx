@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, RefreshCw, Calendar, Filter } from 'lucide-react';
+import { RefreshCw, Calendar, Filter } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 
 export default function ActivityLogs() {
@@ -41,45 +41,6 @@ export default function ActivityLogs() {
       if (interval) clearInterval(interval);
     };
   }, [liveStream, filterSeverity, dateRange]);
-
-  const sanitizeCSV = (str) => {
-    if (!str) return '';
-    const s = String(str);
-    if (/^[=+\-@]/.test(s)) {
-      return "'" + s;
-    }
-    return s;
-  };
-
-  const exportCSV = () => {
-    if (!logs.length) return;
-    const headers = ['Timestamp', 'Severity', 'Source/User', 'Action', 'Target', 'Details'];
-    const rows = logs.map(log => {
-      const source = log.userId ? log.userId.name : log.source;
-      const target = log.resource + (log.resourceId ? `:${log.resourceId}` : '');
-      const rawDetails = typeof log.details === 'object' ? JSON.stringify(log.details) : (log.details || '');
-      
-      // Escape quotes by doubling them, wrap in quotes, and sanitize formulas
-      const details = `"${sanitizeCSV(rawDetails).replace(/"/g, '""')}"`;
-      
-      return [
-        new Date(log.timestamp).toISOString(),
-        sanitizeCSV(log.severity),
-        `"${sanitizeCSV(source)}"`,
-        `"${sanitizeCSV(log.action)}"`,
-        `"${sanitizeCSV(target)}"`,
-        details
-      ];
-    });
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `system_audit_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const getSeverityStyle = (severity) => {
     switch (severity) {
@@ -134,9 +95,6 @@ export default function ActivityLogs() {
         </div>
 
         <div className="flex space-x-4">
-          <button onClick={exportCSV} className="flex items-center border border-gray-700 bg-[#121C36] hover:bg-gray-800 text-gray-300 px-4 py-1.5 rounded text-xs font-mono tracking-widest transition-colors">
-            <Download size={14} className="mr-2" /> EXPORT CSV
-          </button>
           <button 
             onClick={() => setLiveStream(!liveStream)}
             className={`flex items-center border px-4 py-1.5 rounded text-xs font-mono tracking-widest transition-colors ${liveStream ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]' : 'border-[#00F0FF]/30 text-[#00F0FF] hover:bg-[#00F0FF]/10 bg-transparent'}`}

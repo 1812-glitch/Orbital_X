@@ -18,7 +18,7 @@ export default function Login() {
     setIsLoading(true);
     try {
       await login(email, password);
-      navigate('/cubesat-sim');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Login failed. Please verify backend is active.');
     } finally {
@@ -33,7 +33,7 @@ export default function Login() {
     setIsLoading(true);
     try {
       await login('admin@orbitalx.com', 'admin123');
-      navigate('/cubesat-sim');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Demo login failed. Please verify backend is active.');
     } finally {

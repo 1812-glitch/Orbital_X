@@ -1,11 +1,9 @@
 import React from 'react';
-import { RotateCw, Crosshair, Sun, Moon } from 'lucide-react';
+import { RotateCw, Sun, Moon } from 'lucide-react';
 
 function GlobeControlsHud({
   warpSpeed,
   setWarpSpeed,
-  followSat,
-  onToggleFollow,
   lightingMode = 'DAY',
   onToggleLightingMode
 }) {
@@ -47,20 +45,6 @@ function GlobeControlsHud({
           <span>{lightingMode === 'NIGHT' ? 'NIGHT' : 'DAY'}</span>
         </button>
       )}
-
-      {/* Camera Tracking Toggle */}
-      <button
-        onClick={onToggleFollow}
-        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-mono text-xs backdrop-blur-md border transition-all ${
-          followSat
-            ? 'bg-[#00FF66]/20 border-[#00FF66] text-[#00FF66] font-bold shadow-[0_0_12px_rgba(0,255,102,0.3)]'
-            : 'bg-[#0A0F1F]/90 border-gray-800 text-gray-400 hover:text-white'
-        }`}
-        title="Toggle camera following CubeSat in orbit (Me -> CubeSat -> 3D Earth)"
-      >
-        <Crosshair size={13} className={followSat ? 'animate-spin' : ''} />
-        <span>{followSat ? 'TRACKING CUBESAT' : 'FREE CAMERA'}</span>
-      </button>
     </div>
   );
 }

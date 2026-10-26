@@ -431,24 +431,6 @@ const Scene = forwardRef(function Scene({
           sat._liveCoords = state;
         });
 
-        // Dynamic camera tracking: View perspective is Me (screen/camera) -> CubeSat (in front) -> 3D Earth (behind)
-        if (followTracking && selectedSatIds.length > 0) {
-          const targetId = trackedSatId || selectedSatIds[0];
-          const trackedSat = satellites.find(s => s.id === targetId);
-          if (trackedSat && trackedSat._liveCoords) {
-            const coords = trackedSat._liveCoords;
-            // Lock camera directly on radial ray through Earth Center -> CubeSat -> Camera
-            if (time > trackingTransitionUntilRef.current) {
-              const currentPov = globe.pointOfView();
-              globe.pointOfView({
-                lat: coords.lat,
-                lng: coords.lng,
-                altitude: currentPov?.altitude || 1.65
-              }, 0);
-            }
-          }
-        }
-
         // Periodically refresh arc & radar footprint positions (~5 Hz)
         if (time - lastArcTickTimeRef.current > 200) {
           lastArcTickTimeRef.current = time;
@@ -461,31 +443,7 @@ const Scene = forwardRef(function Scene({
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [isPaused, timeScale, followTracking, selectedSatIds, trackedSatId, satellites]);
-
-  // Initial smooth flight to satellite when tracking is activated or target changes
-  const lastTrackedTargetRef = useRef(null);
-  useEffect(() => {
-    if (!followTracking || selectedSatIds.length === 0 || !globeRef.current) {
-      lastTrackedTargetRef.current = null;
-      return;
-    }
-    const targetId = trackedSatId || selectedSatIds[0];
-    const trackedSat = satellites.find(s => s.id === targetId);
-    if (trackedSat && lastTrackedTargetRef.current !== targetId) {
-      lastTrackedTargetRef.current = targetId;
-      trackingTransitionUntilRef.current = performance.now() + 650;
-      const initialLat = trackedSat._liveLat !== undefined ? trackedSat._liveLat : trackedSat.lat;
-      const initialLng = trackedSat._liveLng !== undefined ? trackedSat._liveLng : trackedSat.lng;
-      if (initialLat !== undefined && initialLng !== undefined) {
-        globeRef.current.pointOfView({
-          lat: initialLat,
-          lng: initialLng,
-          altitude: 1.65
-        }, 600);
-      }
-    }
-  }, [followTracking, selectedSatIds, trackedSatId, satellites]);
+  }, [isPaused, timeScale, selectedSatIds, trackedSatId, satellites]);
 
   // Light Orbital Paths for ALL Satellites + Highlighted Glowing Path for the Selected Satellite
   const orbitalRingsGroupRef = useRef(new THREE.Group());

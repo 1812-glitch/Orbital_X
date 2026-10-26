@@ -24,49 +24,6 @@ export default function Reports() {
     }
   };
 
-  const exportCSV = () => {
-    if (!reportData) return;
-    
-    // Quick CSV Generation for Missions
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Mission Name,Status,Satellites Assigned,Start Date,End Date\n";
-    
-    reportData.missions.forEach(m => {
-      const row = `${m.name},${m.status},${m.satelliteCount},${m.startDate ? format(new Date(m.startDate), 'yyyy-MM-dd') : 'N/A'},${m.endDate ? format(new Date(m.endDate), 'yyyy-MM-dd') : 'Ongoing'}`;
-      csvContent += row + "\n";
-    });
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `orbitalx_mission_report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const exportSatelliteReport = () => {
-    if (!selectedSatellite) return;
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Metric,Value\n";
-    csvContent += `Satellite Name,${selectedSatellite.name || 'N/A'}\n`;
-    csvContent += `Satellite ID,${selectedSatellite.satelliteId || 'N/A'}\n`;
-    csvContent += `Orbit Type,${selectedSatellite.orbitType || 'LEO'}\n`;
-    csvContent += `Status,${selectedSatellite.status || 'NOMINAL'}\n`;
-    csvContent += `Altitude,${selectedSatellite.altitude || 550} km\n`;
-    csvContent += `Velocity,${selectedSatellite.velocity || 7.66} km/s\n`;
-    csvContent += `Health Score,${selectedSatellite.health || 98}%\n`;
-    csvContent += `Report Generated,${new Date().toISOString()}\n`;
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `orbitalx_${selectedSatellite.name || 'sat'}_report_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   if (loading) {
     return <div className="text-[#00F0FF] font-mono text-center py-10 tracking-widest animate-pulse">GENERATING FLEET REPORTS...</div>;
   }
@@ -83,13 +40,9 @@ export default function Reports() {
           <p className="text-gray-400 font-mono mt-1 tracking-widest text-xs">MISSION, SATELLITE & SUBSYSTEM AUDIT LOGS</p>
         </div>
         <div className="flex items-center space-x-3">
-          <button 
-            onClick={exportCSV}
-            className="flex items-center space-x-2 bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/30 px-4 py-2 rounded-lg font-mono text-xs tracking-widest uppercase hover:bg-[#00F0FF]/20 transition-colors"
-          >
-            <Download size={14} />
-            <span>Export Fleet CSV</span>
-          </button>
+          <span className="px-3 py-1 rounded bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/30 font-mono text-xs">
+            LIVE TELEMETRY AUDIT
+          </span>
         </div>
       </div>
 
@@ -135,15 +88,6 @@ export default function Reports() {
                 >
                   <Eye size={13} />
                   <span>INSPECT SPECS</span>
-                </button>
-
-                <button
-                  onClick={exportSatelliteReport}
-                  className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-mono font-bold transition-colors"
-                  title="Download Satellite Report"
-                >
-                  <Download size={13} />
-                  <span>DOWNLOAD AUDIT</span>
                 </button>
               </>
             )}

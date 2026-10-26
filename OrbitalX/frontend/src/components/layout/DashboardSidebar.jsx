@@ -13,7 +13,6 @@ import {
   ShieldAlert, 
   Bell, 
   PieChart, 
-  FileBarChart, 
   PanelLeftClose, 
   Shield, 
   Settings, 
@@ -34,7 +33,6 @@ export const NAV_ITEMS = [
   { name: 'Alerts', path: '/alerts', icon: <ShieldAlert size={18} /> },
   { name: 'Notifications', path: '/notifications', icon: <Bell size={18} /> },
   { name: 'Fleet Analytics', path: '/analytics', icon: <PieChart size={18} /> },
-  { name: 'Reports', path: '/reports', icon: <FileBarChart size={18} /> },
 ];
 
 export default function DashboardSidebar({

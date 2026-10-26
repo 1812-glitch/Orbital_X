@@ -19,8 +19,6 @@ const UtcClock = React.memo(function UtcClock() {
 
 export default function CommsHeader({
   currentSat,
-  activeTab,
-  setActiveTab,
   searchParam,
   setSearchParam,
   showMetricsSidebar,
@@ -45,22 +43,7 @@ export default function CommsHeader({
         </div>
       </div>
 
-      {/* Center: Comm Tabs */}
-      <div className="flex items-center bg-[#12192b] border border-gray-800 rounded p-1 font-mono text-xs font-bold self-start xl:self-auto">
-        {['LIVE FEED', 'COMMAND', 'ARCHIVE'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1 rounded transition-all ${
-              activeTab === tab 
-                ? 'bg-[#00F0FF] text-[#0A0F1F] shadow-sm' 
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+
 
       {/* Right: Search, Clock & Closable Sidebar Toggle Buttons */}
       <div className="flex flex-wrap items-center gap-2.5 font-mono text-xs">

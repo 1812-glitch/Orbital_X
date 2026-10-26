@@ -38,7 +38,9 @@ const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout'));
 const Profile = lazy(() => import('./pages/settings/Profile'));
 const Preferences = lazy(() => import('./pages/settings/Preferences'));
+const Security = lazy(() => import('./pages/settings/Security'));
 const Diagnostics = lazy(() => import('./pages/settings/Diagnostics'));
+const Support = lazy(() => import('./pages/support/Support'));
 
 function App() {
   return (
@@ -77,18 +79,22 @@ function App() {
 
                   {/* Phase 12: Analytics */}
                   <Route path="/analytics" element={<FleetAnalytics />} />
-                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/reports" element={<Navigate to="/analytics" replace />} />
 
                   {/* Phase 13/15: Admin Dashboard & Logs */}
                   <Route path="/admin" element={<AdminDashboard />} />
                   <Route path="/admin/users" element={<UserManagement />} />
                   <Route path="/admin/logs" element={<ActivityLogs />} />
 
+                  {/* Support Operations */}
+                  <Route path="/support" element={<Support />} />
+
                   {/* Phase 14: Settings */}
                   <Route path="/settings" element={<SettingsLayout />}>
                     <Route index element={<Profile />} />
                     <Route path="profile" element={<Profile />} />
                     <Route path="preferences" element={<Preferences />} />
+                    <Route path="security" element={<Security />} />
                     <Route path="diagnostics" element={<Diagnostics />} />
                   </Route>
                 </Route>

@@ -23,7 +23,6 @@ export default function OrbitalViewer() {
   // Dynamic Simulator State
   const [isPaused, setIsPaused] = useState(false);
   const [timeScale, setTimeScale] = useState(1);
-  const [followTracking, setFollowTracking] = useState(false);
   const [inspectorSatId, setInspectorSatId] = useState(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
 
@@ -78,7 +77,6 @@ export default function OrbitalViewer() {
       }
       setIsInspectorOpen(true);
     } else {
-      setFollowTracking(false);
       setInspectorSatId(null);
     }
   }, [selectedSatIds, inspectorSatId]);
@@ -107,7 +105,6 @@ export default function OrbitalViewer() {
     if (sceneRef.current?.resetView) {
       sceneRef.current.resetView();
     }
-    setFollowTracking(false);
   };
 
   return (
@@ -129,7 +126,6 @@ export default function OrbitalViewer() {
             showLabels={showLabels}
             showUplinks={showUplinks}
             autoRotate={autoRotate}
-            followTracking={followTracking}
             timeScale={timeScale}
             isPaused={isPaused}
             lightingMode={lightingMode}
@@ -270,8 +266,6 @@ export default function OrbitalViewer() {
             activeSatId={inspectorSatId}
             onSelectActiveSatId={(id) => setInspectorSatId(id)}
             onDeselectSatellite={(id) => handleToggleSatellite(id)}
-            followTracking={followTracking}
-            onToggleTracking={() => setFollowTracking(!followTracking)}
             onClose={() => setIsInspectorOpen(false)}
           />
         </div>
@@ -321,8 +315,6 @@ export default function OrbitalViewer() {
           lightingMode={lightingMode}
           onToggleLightingMode={() => setLightingMode(m => m === 'DAY' ? 'NIGHT' : 'DAY')}
           onResetView={handleResetCamera}
-          followTracking={followTracking}
-          onToggleTracking={() => setFollowTracking(!followTracking)}
           hasSelectedSat={selectedSatIds.length > 0}
         />
       </div>

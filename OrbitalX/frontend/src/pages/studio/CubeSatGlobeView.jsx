@@ -35,7 +35,6 @@ function CubeSatGlobeView({
   const [isPaused, setIsPaused] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
   const [showOrbits, setShowOrbits] = useState(true);
-  const [followSat, setFollowSat] = useState(false);
   const [lightingMode, setLightingMode] = useState('DAY');
 
   // Concentric Layers & Shader Mesh References
@@ -58,9 +57,6 @@ function CubeSatGlobeView({
 
   const isPausedRef = useRef(isPaused);
   isPausedRef.current = isPaused;
-
-  const followSatRef = useRef(followSat);
-  followSatRef.current = followSat;
 
   const groundStationsRef = useRef(groundStations);
   groundStationsRef.current = groundStations;
@@ -439,16 +435,6 @@ function CubeSatGlobeView({
           ledRef.current.material.opacity = Math.sin(now * blinkSpeed) > 0 ? 1.0 : 0.25;
         }
 
-        // Dynamic camera tracking: View perspective is Me (screen/camera) -> CubeSat (in front) -> 3D Earth (behind)
-        if (followSatRef.current && !isTransitioningRef.current) {
-          const currentPov = globe.pointOfView();
-          globe.pointOfView({
-            lat,
-            lng,
-            altitude: currentPov?.altitude || 1.8
-          }, 0);
-        }
-
         // Throttled UI Telemetry & Communication Arcs update (~4-5 Hz)
         if (now - lastUiUpdate > 220) {
           lastUiUpdate = now;
@@ -492,28 +478,11 @@ function CubeSatGlobeView({
     return () => cancelAnimationFrame(animFrameId);
   }, [satId, inclination]);
 
-  // Handle follow tracking toggle
-  const handleToggleFollow = () => {
-    const nextFollow = !followSat;
-    setFollowSat(nextFollow);
-    followSatRef.current = nextFollow;
-
-    if (nextFollow && globeRef.current && lastPosRef.current) {
-      isTransitioningRef.current = true;
-      globeRef.current.pointOfView(
-        { lat: lastPosRef.current.lat, lng: lastPosRef.current.lng, altitude: 1.8 },
-        700
-      );
-      setTimeout(() => { isTransitioningRef.current = false; }, 720);
-    }
-  };
-
   // Reset Camera View
   const handleResetCamera = () => {
     if (globeRef.current) {
       globeRef.current.pointOfView({ lat: 20, lng: 0, altitude: 2.2 }, 800);
     }
-    setFollowSat(false);
   };
 
   return (
@@ -578,8 +547,6 @@ function CubeSatGlobeView({
           lightingMode={lightingMode}
           onToggleLightingMode={() => setLightingMode(m => m === 'DAY' ? 'NIGHT' : 'DAY')}
           onResetView={handleResetCamera}
-          followTracking={followSat}
-          onToggleTracking={handleToggleFollow}
           hasSelectedSat={true}
         />
       </div>

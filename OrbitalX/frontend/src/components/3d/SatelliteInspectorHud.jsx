@@ -114,19 +114,7 @@ export default function SatelliteInspectorHud({
         </div>
       </div>
 
-      {/* Prominent Track Satellite Button */}
-      <button
-        id="inspector-track-satellite-btn"
-        onClick={onToggleTracking}
-        className={`w-full py-2.5 px-3 rounded-xl font-mono text-xs font-bold tracking-wider flex items-center justify-center space-x-2 transition-all cursor-pointer border ${
-          followTracking
-            ? 'bg-[#00FF66]/20 border-[#00FF66] text-[#00FF66] shadow-[0_0_20px_rgba(0,255,102,0.35)] animate-pulse'
-            : 'bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border-[#00F0FF]/50 text-[#00F0FF] shadow-[0_0_15px_rgba(0,240,255,0.2)]'
-        }`}
-      >
-        <Target size={15} className={followTracking ? 'animate-spin' : ''} />
-        <span>{followTracking ? 'TRACKING ACTIVE (LOCKED)' : 'TRACK SATELLITE'}</span>
-      </button>
+
 
       {/* LIVE TELEMETRY 6-Metric Grid */}
       <div className="space-y-1.5">

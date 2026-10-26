@@ -29,7 +29,7 @@ export default function Register() {
     }
     try {
       await register(name, email, password);
-      navigate("/profile");
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || "Registration failed");
     }

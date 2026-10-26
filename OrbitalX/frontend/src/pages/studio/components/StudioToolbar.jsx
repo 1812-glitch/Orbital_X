@@ -33,7 +33,8 @@ export default function StudioToolbar({
   diagnosticsOpen,
   setDiagnosticsOpen,
   warningsCount = 0,
-  totalParts = 0
+  totalParts = 0,
+  onLoadPreset = null
 }) {
   const navigate = useNavigate();
 
@@ -126,6 +127,17 @@ export default function StudioToolbar({
 
       {/* Right: Validation, Save, Export, Reset & Drawers Controls */}
       <div className="pointer-events-auto flex items-center space-x-2 bg-[#0A0F1F]/92 backdrop-blur-md border border-gray-800 rounded-xl px-2.5 py-1.5 shadow-2xl">
+        {onLoadPreset && (
+          <button
+            id="toolbar-use-preset-btn"
+            onClick={() => onLoadPreset(formFactor)}
+            className="flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-mono font-bold transition-all bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.2)] cursor-pointer"
+            title="Load Nominal Preset Hardware"
+          >
+            <span>USE PRESET</span>
+          </button>
+        )}
+
         <button
           onClick={triggerValidate}
           disabled={isValidating}
